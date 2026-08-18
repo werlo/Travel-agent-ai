@@ -2,16 +2,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../src/App'
-import { COPY_FAILED_MESSAGE } from '../src/ui/screens/ExportDialog'
+import { CLIPBOARD_FAILED_MESSAGE, COPY_FAILED_MESSAGE } from '../src/ui/screens/ExportDialog'
 
 /**
- * S6 as the user meets it (R17).
+ * R17, as amended by customer fix 4: **the button copies.**
+ *
+ * It used to open this dialog with the text pre-selected and leave the user to
+ * press Ctrl+C — two judges clicked it, pasted nothing, and said the label lied.
+ * The dialog is now the fallback: it opens when `navigator.clipboard` is missing
+ * or refuses, which is exactly what an insecure origin does, and it says so.
  *
  * jsdom implements no `HTMLDialogElement.showModal`, which is convenient rather
  * than awkward: the un-modal fallback is a real browser state and the design
- * requires it to keep working. The clipboard is driven explicitly — granted or
- * denied — because both paths are specified and the denied one is what any
- * insecure origin does.
+ * requires it to keep working.
  */
 
 type User = ReturnType<typeof userEvent.setup>
@@ -29,18 +32,9 @@ async function toPlan(): Promise<User> {
   return user
 }
 
-async function openDialog(): Promise<{ user: User; textarea: HTMLTextAreaElement }> {
-  const user = await toPlan()
-  await user.click(screen.getByRole('button', { name: 'Copy as text' }))
-  const textarea = (await screen.findByLabelText(
-    'Your trip as plain text',
-  )) as HTMLTextAreaElement
-  return { user, textarea }
-}
-
 /**
  * `userEvent.setup()` installs its own `navigator.clipboard` stub, so the spy has
- * to be installed *after* the dialog is open or it is silently replaced.
+ * to be installed *after* the user is set up or it is silently replaced.
  */
 function installClipboard(
   writeText: ReturnType<typeof vi.fn>,
@@ -62,12 +56,59 @@ function denyClipboard(): ReturnType<typeof vi.fn> {
   )
 }
 
+/** The fallback path: a refused clipboard is the only way the dialog opens now. */
+async function openDialog(): Promise<{ user: User; textarea: HTMLTextAreaElement }> {
+  const user = await toPlan()
+  denyClipboard()
+  await user.click(screen.getByRole('button', { name: 'Copy as text' }))
+  const textarea = (await screen.findByLabelText(
+    'Your trip as plain text',
+  )) as HTMLTextAreaElement
+  return { user, textarea }
+}
+
 afterEach(() => {
   Reflect.deleteProperty(navigator, 'clipboard')
 })
 
-describe('S6 — the export dialog (R17)', () => {
-  it('is not on screen until Copy as text is pressed', async () => {
+describe('Copy as text copies (R17)', () => {
+  it('writes the itinerary to the clipboard in the same click and announces Copied', async () => {
+    const user = await toPlan()
+    const writeText = grantClipboard()
+
+    await user.click(screen.getByRole('button', { name: 'Copy as text' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    const copied = writeText.mock.calls[0]?.[0] as string
+    const destination = document.querySelector('.plan-hero__title')?.textContent ?? ''
+    expect(destination.length).toBeGreaterThan(0)
+    expect(copied).toContain(destination)
+    expect(copied.split('\n').filter((line) => /^Day \d+ — /.test(line))).toHaveLength(6)
+
+    const announced = [...document.querySelectorAll('[role="status"]')].some(
+      (node) => (node.textContent ?? '').trim() === 'Copied',
+    )
+    expect(announced).toBe(true)
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+
+  it('does not open the dialog when the clipboard works', async () => {
+    const user = await toPlan()
+    grantClipboard()
+    await user.click(screen.getByRole('button', { name: 'Copy as text' }))
+    await screen.findByRole('button', { name: 'Copied' })
+    expect(screen.queryByLabelText('Your trip as plain text')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the dialog and names the failure when the clipboard refuses', async () => {
+    const { textarea } = await openDialog()
+    expect(await screen.findByText(CLIPBOARD_FAILED_MESSAGE)).toBeInTheDocument()
+    expect(textarea.value.length).toBeGreaterThan(0)
+  })
+})
+
+describe('S6 — the export dialog (R17, the fallback)', () => {
+  it('is not on screen before anything is clicked', async () => {
     await toPlan()
     expect(screen.queryByLabelText('Your trip as plain text')).not.toBeInTheDocument()
     expect(screen.queryByText('Copy your trip')).not.toBeInTheDocument()
@@ -132,11 +173,10 @@ describe('S6 — the export dialog (R17)', () => {
 
   it('tells the user how to copy by hand when the clipboard is unavailable', async () => {
     const { user, textarea } = await openDialog()
-    denyClipboard()
     await user.click(screen.getByRole('button', { name: 'Copy' }))
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(COPY_FAILED_MESSAGE)
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts.some((node) => node.textContent === COPY_FAILED_MESSAGE)).toBe(true)
     // The text is still on screen and re-selected, so the fallback is actionable.
     expect(textarea).toBeInTheDocument()
     expect(textarea.selectionEnd).toBe(textarea.value.length)
@@ -174,6 +214,7 @@ describe('S6 — the export dialog (R17)', () => {
     await screen.findByRole('button', { name: 'Copied' })
     await user.click(screen.getByRole('button', { name: 'Close' }))
 
+    denyClipboard()
     await user.click(screen.getByRole('button', { name: 'Copy as text' }))
     expect(await screen.findByRole('button', { name: 'Copy' })).toBeInTheDocument()
     expect(document.querySelector('.dialog [role="status"]')?.textContent).toBe('')

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CATALOGUE, localCatalogue } from '../src/data/localCatalogue'
-import { chooseExperiences } from '../src/domain/itinerary'
+import { scheduleItinerary } from '../src/domain/itinerary'
+import { SEASONS } from '../src/domain/season'
 import { priceCandidate } from '../src/domain/pricing'
 import { VIBE_ORDER } from '../src/domain/vibes'
 import {
@@ -32,8 +33,12 @@ function referenceContext(budget: Rupees): PlanContext {
     nights: 5,
     days: 6,
     travellers: 2,
+    adults: 2,
+    children: [],
     rooms: 1,
     budget,
+    freeDay: false,
+    season: SEASONS.standard,
     preferTags: [],
   }
 }
@@ -42,7 +47,8 @@ function referenceTotal(destination: Destination, tier: StayTier): Rupees {
   const ctx = referenceContext(100000)
   const stay = destination.stays.find((s) => s.tier === tier)
   if (stay === undefined) throw new Error(`${destination.id} has no ${tier} stay`)
-  return priceCandidate(destination, stay, chooseExperiences(destination, ctx), ctx).partyTotal
+  const chosen = scheduleItinerary(destination, stay, ctx).chosen
+  return priceCandidate(destination, stay, chosen, ctx).partyTotal
 }
 
 /**

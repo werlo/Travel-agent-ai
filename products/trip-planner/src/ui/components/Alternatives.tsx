@@ -72,19 +72,58 @@ function AbsentCard({ variant, reason }: { variant: PlanVariant; reason: string 
   )
 }
 
+/** R22 — the control that replaced two empty dashed boxes and a Start over. */
+export const REJECT_LABEL = 'Not this one — somewhere else'
+export const EXHAUSTED_MESSAGE =
+  "That's every destination that fits — here are the ones you turned down"
+
+function RejectCard({ onReject }: { onReject: () => void }) {
+  return (
+    <li className="altcard altcard--reject" data-alt="reject">
+      <p className="badge badge--neutral">Somewhere else</p>
+      <p className="altcard__absent">
+        Keep the dates, the budget, the party and every answer — we will find the next
+        best place.
+      </p>
+      <button
+        type="button"
+        className="btn btn--secondary altcard__action"
+        onClick={onReject}
+      >
+        {REJECT_LABEL}
+      </button>
+    </li>
+  )
+}
+
 export interface AlternativesProps {
   planSet: PlanSet
   selected: PlanVariant
   onSelect: (variant: PlanVariant) => void
+  /** R22 — turn the shown destination down and keep the whole trip. */
+  onReject: () => void
+  onUndoReject: (destinationId: string) => void
+  /** True once every destination that fits has been turned down. */
+  exhausted: boolean
 }
 
-export function Alternatives({ planSet, selected, onSelect }: AlternativesProps) {
+export function Alternatives({
+  planSet,
+  selected,
+  onSelect,
+  onReject,
+  onUndoReject,
+  exhausted,
+}: AlternativesProps) {
   const shown = planSet[selected] ?? planSet.recommended
   const recommendedTotal = planSet.recommended.cost.partyTotal
 
   const slots = []
+  // R22 — where neither alternative exists, the space carries the one control that
+  // does something instead of two dashed boxes that do not.
+  const noAlternatives = planSet.saver === null && planSet.stretch === null
 
-  if (selected !== 'saver') {
+  if (selected !== 'saver' && !noAlternatives) {
     slots.push(
       planSet.saver !== null ? (
         <AltCard
@@ -104,7 +143,7 @@ export function Alternatives({ planSet, selected, onSelect }: AlternativesProps)
     )
   }
 
-  if (selected !== 'stretch') {
+  if (selected !== 'stretch' && !noAlternatives) {
     slots.push(
       planSet.stretch !== null ? (
         <AltCard
@@ -136,12 +175,38 @@ export function Alternatives({ planSet, selected, onSelect }: AlternativesProps)
     )
   }
 
+  if (!exhausted) slots.push(<RejectCard key="reject" onReject={onReject} />)
+
   return (
     <section className="plan-section plan-section--alts" aria-labelledby="plan-alts">
       <h2 id="plan-alts" className="plan-section__title">
         Other ways to do this
       </h2>
       <ul className="altcards">{slots}</ul>
+      {exhausted ? (
+        <p className="plan-section__footnote" role="status">
+          {EXHAUSTED_MESSAGE}
+        </p>
+      ) : null}
+      {planSet.excluded.length > 0 ? (
+        <div className="excluded">
+          <h3 className="excluded__title">You turned these down</h3>
+          <ul className="excluded__list">
+            {planSet.excluded.map((destination) => (
+              <li key={destination.id} className="excluded__item">
+                <span className="excluded__name">{destination.name}</span>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => onUndoReject(destination.id)}
+                >
+                  {`Put ${destination.name} back`}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   )
 }

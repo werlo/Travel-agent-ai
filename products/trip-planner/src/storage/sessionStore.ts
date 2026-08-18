@@ -26,7 +26,13 @@ import { ORIGIN_CITIES } from '../domain/types'
  */
 
 export const STORAGE_KEY = 'compass.session.v1'
-export const SCHEMA_VERSION = 1
+/**
+ * 2 — refinement round 1 added adults/children, the free day and the list of
+ * rejected destinations. A v1 blob is dropped rather than migrated: it priced
+ * every traveller as an adult and knew nothing about season, so re-deriving it is
+ * both cheaper and more honest than guessing at the missing halves.
+ */
+export const SCHEMA_VERSION = 2
 
 export interface PersistedSession {
   schema: typeof SCHEMA_VERSION
@@ -38,6 +44,8 @@ export interface PersistedSession {
   answers: Record<QuestionId, OptionId>
   selectedVariant: PlanVariant
   planSet: PlanSet | null
+  /** R22 — destination ids the user turned down, in the order they did. */
+  excluded: readonly string[]
 }
 
 export interface ReadResult {
@@ -72,12 +80,19 @@ function narrowBasics(value: unknown): Basics | null {
   if (endDate === null || !isISODate(endDate)) return null
   if (budget === null || travellers === null) return null
   if (origin === null || !(ORIGIN_CITIES as readonly string[]).includes(origin)) return null
+  const children = Array.isArray(value.children)
+    ? value.children.filter((age): age is number => int(age) !== null)
+    : []
+  const adults = int(value.adults) ?? Math.max(1, travellers - children.length)
   return {
     startDate,
     endDate,
     budget,
-    travellers,
+    travellers: adults + children.length,
+    adults,
+    children,
     origin: origin as Basics['origin'],
+    freeDay: value.freeDay === true,
   }
 }
 
@@ -112,6 +127,8 @@ function narrowPlan(value: unknown): Plan | null {
     return null
   }
   if (!Array.isArray(value.days) || value.days.length === 0) return null
+  // Added in refinement round 1: a cached plan without them cannot be drawn.
+  if (str(value.baseName) === null || !Array.isArray(value.unscheduled)) return null
   if (!Array.isArray(value.legs) || value.legs.length !== 2) return null
   // R10's two lists are rendered unguarded, so a plan without them is not a plan
   // we can draw — it is recomputed instead (R13 makes that free).
@@ -173,6 +190,14 @@ function narrowPlanSet(value: unknown, catalogueVersion: string): PlanSet | null
     catalogueVersion,
     snapshotDate: str(value.snapshotDate) ?? '',
     candidatesEvaluated: int(value.candidatesEvaluated) ?? 0,
+    excluded: Array.isArray(value.excluded)
+      ? value.excluded.flatMap((entry) => {
+          if (!isRecord(entry)) return []
+          const id = str(entry.id)
+          const name = str(entry.name)
+          return id === null || name === null ? [] : [{ id, name }]
+        })
+      : [],
   }
 }
 
@@ -217,6 +242,9 @@ export function readSession(catalogueVersion: string): ReadResult {
         ? (variant as PlanVariant)
         : 'recommended',
     planSet: narrowPlanSet(parsed.planSet, catalogueVersion),
+    excluded: Array.isArray(parsed.excluded)
+      ? parsed.excluded.filter((id): id is string => typeof id === 'string')
+      : [],
   }
 
   // A phase that its own data cannot support is walked back rather than rendered.

@@ -37,7 +37,7 @@ describe('S2 — trip basics (R2, R3)', () => {
 
   it('updates the summary bar as the party changes, before Continue', async () => {
     const user = await toBasics()
-    const travellers = screen.getByLabelText('Travellers')
+    const travellers = screen.getByLabelText('Adults')
     await user.clear(travellers)
     await user.type(travellers, '4')
 
@@ -94,7 +94,7 @@ describe('S2 — trip basics (R2, R3)', () => {
     fireEvent.change(screen.getByLabelText('Total budget for the whole party'), {
       target: { value: '0' },
     })
-    fireEvent.change(screen.getByLabelText('Travellers'), { target: { value: '13' } })
+    fireEvent.change(screen.getByLabelText('Adults'), { target: { value: '13' } })
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     expect(await screen.findByText('2 things to fix before we can plan')).toBeInTheDocument()

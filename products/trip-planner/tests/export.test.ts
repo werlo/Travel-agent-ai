@@ -21,7 +21,10 @@ const REFERENCE: Basics = {
   endDate: '2026-10-15',
   budget: 60000,
   travellers: 2,
+  adults: 2,
+  children: [],
   origin: 'Bengaluru',
+  freeDay: false,
 }
 
 function planFor(vibe: Vibe, basics: Basics = REFERENCE): Plan {
@@ -39,7 +42,7 @@ describe('toPlainText (R17)', () => {
   const lines = text.split('\n')
 
   it('opens with the destination and the trip length', () => {
-    expect(lines[0]).toBe(`${plan.destinationName} — 5 nights`)
+    expect(lines[0]).toBe(`${plan.destinationName} — 5 nights, based in ${plan.baseName}`)
   })
 
   it('carries the date range, the party and the origin on the second line', () => {
@@ -47,7 +50,7 @@ describe('toPlainText (R17)', () => {
   })
 
   it('states the party total and the per-person figure', () => {
-    expect(lines[2]).toMatch(/^Total ₹[\d,]+ for 2 \(₹[\d,]+ per person\)$/)
+    expect(lines[2]).toMatch(/^Total ₹[\d,]+ for 2 adults \(₹[\d,]+ per person\), incl\. GST$/)
     const total = Number((lines[2] ?? '').replace(/^Total ₹([\d,]+).*$/, '$1').replace(/,/g, ''))
     expect(total).toBe(plan.cost.partyTotal)
   })
@@ -64,7 +67,7 @@ describe('toPlainText (R17)', () => {
   })
 
   it('names the stay, the four line items and the plan ID', () => {
-    expect(text).toContain(`Stay: ${plan.stay.name}, 5 nights, 1 room`)
+    expect(text).toContain(`Stay: ${plan.stay.name} (${plan.stay.baseName}), 5 nights, 1 room`)
     expect(text).toMatch(
       /Travel ₹[\d,]+ · Stay ₹[\d,]+ · Experiences ₹[\d,]+ · Local allowance ₹[\d,]+/,
     )
@@ -100,7 +103,7 @@ describe('toPlainText (R17)', () => {
     const solo = planFor('peace', { ...REFERENCE, travellers: 1 })
     const text1 = toPlainText(solo, CATALOGUE.meta)
     expect(text1).toContain('1 traveller ·')
-    expect(text1).toMatch(/Total ₹[\d,]+ for 1 \(/)
+    expect(text1).toMatch(/Total ₹[\d,]+ for 1 adult \(/)
     expect(text1).toContain('1 room')
   })
 })

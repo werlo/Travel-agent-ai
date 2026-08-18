@@ -17,7 +17,10 @@ const BASICS: Basics = {
   endDate: '2026-10-15',
   budget: 60000,
   travellers: 2,
+  adults: 2,
+  children: [],
   origin: 'Bengaluru',
+  freeDay: false,
 }
 
 function inputFor(
@@ -118,7 +121,23 @@ describe('the plan itself (R7)', () => {
         const { input } = inputFor(vibe, {}, { endDate })
         const plan = generatePlanSet(input, CATALOGUE).recommended
         expect(plan.days, `${vibe}/${nights}`).toHaveLength(nights + 1)
-        for (const day of plan.days) expect(day.experiences.length).toBeGreaterThanOrEqual(1)
+        // R21 — a day is filled or it says it is empty; it is never padded with an
+        // experience the plan has already used (customer fix 6). A trip longer than
+        // the base town has things to do therefore has honest empty days.
+        for (const day of plan.days) {
+          if (day.experiences.length === 0) {
+            expect(
+              day.note !== null || day.legs.length > 0,
+              `${vibe}/${nights} day ${day.day}`,
+            ).toBe(true)
+          }
+        }
+        const names = plan.days.flatMap((day) => day.experiences.map((e) => e.name))
+        expect(new Set(names).size, `${vibe}/${nights} repeats`).toBe(names.length)
+        // Every trip of a week or less still fills its first days.
+        if (nights <= 5) {
+          expect(plan.days[1]?.experiences.length, `${vibe}/${nights}`).toBeGreaterThanOrEqual(1)
+        }
       }
     }
   })

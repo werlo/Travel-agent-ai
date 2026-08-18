@@ -5,6 +5,7 @@ import {
   clearSession,
   readSession,
   writeSession,
+  SCHEMA_VERSION,
   STORAGE_KEY,
   type PersistedSession,
 } from '../src/storage/sessionStore'
@@ -24,7 +25,10 @@ const BASICS: Basics = {
   endDate: '2026-10-15',
   budget: 60000,
   travellers: 2,
+  adults: 2,
+  children: [],
   origin: 'Bengaluru',
+  freeDay: false,
 }
 
 function afterBasics(): SessionState {
@@ -167,7 +171,7 @@ describe('the session at rest (R15)', () => {
 
   function persist(overrides: Partial<PersistedSession> = {}): PersistedSession {
     const session: PersistedSession = {
-      schema: 1,
+      schema: SCHEMA_VERSION,
       catalogueVersion: CATALOGUE.meta.version,
       phase: 'question',
       vibe: 'beach',
@@ -175,6 +179,7 @@ describe('the session at rest (R15)', () => {
       answers: { 'beach-region': 'within-india' },
       selectedVariant: 'recommended',
       planSet: null,
+      excluded: [],
       ...overrides,
     }
     writeSession(session)
@@ -239,7 +244,7 @@ describe('the session at rest (R15)', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        schema: 1,
+        schema: SCHEMA_VERSION,
         catalogueVersion: CATALOGUE.meta.version,
         phase: 'plan',
         vibe: 'not-a-vibe',
@@ -257,7 +262,7 @@ describe('the session at rest (R15)', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        schema: 1,
+        schema: SCHEMA_VERSION,
         catalogueVersion: CATALOGUE.meta.version,
         phase: 'question',
         vibe: 'beach',
@@ -341,7 +346,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
   it('round-trips the chosen variant across a reload (R15)', () => {
     const { planSet } = planned()
     writeSession({
-      schema: 1,
+      schema: SCHEMA_VERSION,
       catalogueVersion: CATALOGUE.meta.version,
       phase: 'plan',
       vibe: 'beach',
@@ -349,6 +354,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       answers: {},
       selectedVariant: 'saver',
       planSet,
+      excluded: [],
     })
 
     const restored = readSession(CATALOGUE.meta.version).session
@@ -364,7 +370,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       recommended: { ...planSet.recommended, why: { reasons: [], rejected: [] } },
     }
     writeSession({
-      schema: 1,
+      schema: SCHEMA_VERSION,
       catalogueVersion: CATALOGUE.meta.version,
       phase: 'plan',
       vibe: 'beach',
@@ -372,6 +378,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       answers: {},
       selectedVariant: 'recommended',
       planSet: gutted as unknown as PlanSet,
+      excluded: [],
     })
 
     const restored = readSession(CATALOGUE.meta.version).session
@@ -383,7 +390,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
     const { planSet } = planned()
     const corrupt = { ...planSet, saver: { planId: 7 }, saverAbsentReason: null }
     writeSession({
-      schema: 1,
+      schema: SCHEMA_VERSION,
       catalogueVersion: CATALOGUE.meta.version,
       phase: 'plan',
       vibe: 'beach',

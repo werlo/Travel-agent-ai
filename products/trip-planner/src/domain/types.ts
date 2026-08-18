@@ -90,6 +90,17 @@ export interface Fare {
   mode: 'flight' | 'train' | 'road'
 }
 
+/**
+ * R7 (amended, fix 9) — the town a plan is actually centred on. A destination is a
+ * label; a base is a place with a hotel in it, and everything the plan schedules is
+ * within `MAX_MINUTES_FROM_BASE` of it.
+ */
+export interface BaseTown {
+  id: string
+  /** 'Fort Kochi' — named in the plan header. */
+  name: string
+}
+
 export interface Stay {
   id: string
   /** R7 requires the property to be named on screen. */
@@ -98,8 +109,16 @@ export interface Stay {
   pricePerRoomPerNight: Rupees
   /** A7: one room per two travellers, rounded up. */
   roomCapacity: 2
+  /** Which of the destination's bases this property sits in (fix 9). */
+  baseId: string
   tags: readonly DestinationTag[]
 }
+
+/**
+ * 0 = Sunday … 6 = Saturday. Structured, so the scheduler can read it: the day of
+ * the week used to live in the blurb prose, where nothing could enforce it (fix 1).
+ */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
 export interface Experience {
   id: string
@@ -112,8 +131,14 @@ export interface Experience {
   pricePerPerson: Rupees
   durationHours: number
   tags: readonly DestinationTag[]
-  /** Fillers for long trips; see the itinerary rule in docs/02-architecture.md §4.7. */
+  /** Low-priority filler, dealt last. Never dealt twice (fix 6). */
   repeatable: boolean
+  /** The base town this sits in (fix 9). */
+  baseId: string
+  /** Travel time from that base. Over 90 and the plan will not schedule it. */
+  minutesFromBase: number
+  /** null = any day. Otherwise the ONLY weekday it may be scheduled on (fix 1). */
+  fixedWeekday: Weekday | null
 }
 
 export type VibeAffinity = 0 | 1 | 2 | 3 | 4 | 5
@@ -123,6 +148,8 @@ export interface Destination {
   name: string
   country: string
   region: Region
+  /** One or more towns a plan can be based in. The stay picks one (fix 9). */
+  bases: readonly BaseTown[]
   /** Integer only — floats break tie-breaks. */
   vibeAffinity: Readonly<Record<Vibe, VibeAffinity>>
   tags: readonly DestinationTag[]
@@ -154,8 +181,15 @@ export interface Basics {
   startDate: ISODate
   endDate: ISODate
   budget: Rupees
+  /** adults + children.length. Kept as the party size every requirement quotes. */
   travellers: number
+  /** R24 (fix 10) — priced at the full adult rate. */
+  adults: number
+  /** R24 (fix 10) — ages, 2–11. One entry per child; they occupy a room place. */
+  children: readonly number[]
   origin: OriginCity
+  /** R21 (fix 6) — leave exactly one middle day with nothing scheduled. */
+  freeDay: boolean
 }
 
 // ------------------------------------------------------------- question graph
@@ -255,10 +289,31 @@ export interface PlanContext {
   /** nights + 1. */
   days: number
   travellers: number
-  /** ceil(travellers / 2). */
+  adults: number
+  /** Ages, 2–11 (R24). */
+  children: readonly number[]
+  /** ceil(travellers / 2) — children occupy a room place (R24). */
   rooms: number
   budget: Rupees
+  freeDay: boolean
+  /** R23 (fix 8) — the calendar is an input to the price. */
+  season: Season
   preferTags: readonly DestinationTag[]
+}
+
+// --------------------------------------------------------------------- season
+
+export type SeasonId = 'peak' | 'off' | 'standard'
+
+/** R23 — a named window with a signed percentage applied to stay and travel. */
+export interface Season {
+  id: SeasonId
+  /** 'Peak season (25 Dec – 2 Jan)'. */
+  label: string
+  /** Signed integer percent: +35, -20, 0. */
+  loadingPercent: number
+  /** 'Peak season (25 Dec – 2 Jan): +35% on stay and travel'. */
+  line: string
 }
 
 export interface CostBreakdown {
@@ -266,7 +321,9 @@ export interface CostBreakdown {
   stay: Rupees
   experiences: Rupees
   localAllowance: Rupees
-  /** travel + stay + experiences + localAllowance — computed, never stored twice. */
+  /** R23 — signed seasonal loading on stay and travel. Its own visible line. */
+  seasonal: Rupees
+  /** The five lines, added — computed, never stored twice. */
   partyTotal: Rupees
   /** round(partyTotal / travellers / 100) * 100. */
   perPerson: Rupees
@@ -276,6 +333,7 @@ export interface CostBreakdown {
     stay: string
     experiences: string
     localAllowance: string
+    seasonal: string
     perPerson: string
   }
 }
@@ -303,6 +361,19 @@ export interface DayBlock {
   legs: readonly TravelLeg[]
   /** 'Check in — Brunton Boatyard' / '5 nights, 1 room' on the first and last day. */
   stayEntry: { label: string; detail: string } | null
+  /** R21 — 'Nothing scheduled — this day is yours' on a day with no experiences. */
+  note: string | null
+}
+
+/**
+ * R18 (fix 1) — an experience the plan could not place honestly, and why. Rendered
+ * under the itinerary, never silently swallowed.
+ */
+export interface UnscheduledNote {
+  experienceId: string
+  experienceName: string
+  /** 'Not scheduled: Anjuna flea market — runs Wednesdays only, and your dates have no Wednesday'. */
+  line: string
 }
 
 // --------------------------------------------------------------------- plans
@@ -350,10 +421,25 @@ export interface Plan {
   endDate: ISODate
   nights: number
   travellers: number
+  adults: number
+  /** Count of children, ages 2–11 (R24). */
+  children: number
   origin: OriginCity
-  stay: { id: string; name: string; tier: StayTier; nights: number; rooms: number }
+  /** The town this plan books and schedules around (R7 amended). */
+  baseName: string
+  stay: {
+    id: string
+    name: string
+    tier: StayTier
+    nights: number
+    rooms: number
+    pricePerRoomPerNight: Rupees
+    baseName: string
+  }
   legs: readonly [TravelLeg, TravelLeg]
   days: readonly DayBlock[]
+  /** R18 — what we would not put on a day that contradicts it. */
+  unscheduled: readonly UnscheduledNote[]
   cost: CostBreakdown
   budget: BudgetLine
   why: Why
@@ -376,6 +462,8 @@ export interface PlanSet {
   catalogueVersion: string
   snapshotDate: ISODate
   candidatesEvaluated: number
+  /** R22 (fix 7) — destinations the user turned down, in the order they did. */
+  excluded: readonly { id: string; name: string }[]
 }
 
 export interface PlanInput {
@@ -388,4 +476,9 @@ export interface PlanInput {
    * the plan ID hash, so a restored plan is a different plan and says so.
    */
   forceConstraints?: readonly ConstraintKey[]
+  /**
+   * R22 — destinations the user has rejected. Part of the plan ID hash, so
+   * 'somewhere else' is genuinely a different plan.
+   */
+  excludeDestinationIds?: readonly string[]
 }

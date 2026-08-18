@@ -1,0 +1,27 @@
+import { chromium } from 'playwright'
+const b = await chromium.launch()
+const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read','clipboard-write'] })
+const p = await ctx.newPage()
+p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE ERROR:', m.text()) })
+await p.goto('http://localhost:4079'); await p.waitForTimeout(400)
+await p.getByText('Party', { exact: true }).click()
+await p.getByRole('button', { name: 'Continue' }).click(); await p.waitForTimeout(300)
+await p.fill('#field-startDate', '2026-11-13'); await p.fill('#field-endDate', '2026-11-16')
+await p.fill('#field-budget', '450000'); await p.fill('#field-travellers', '9')
+await p.selectOption('#field-origin', 'Delhi')
+await p.getByRole('button', { name: 'Continue' }).click(); await p.waitForTimeout(300)
+await p.getByText('Within India', { exact: true }).click(); await p.waitForTimeout(250)
+await p.getByText('West coast', { exact: true }).click(); await p.waitForTimeout(250)
+await p.getByText('Beach shacks', { exact: true }).click(); await p.waitForTimeout(250)
+await p.getByText('Resort comfort', { exact: true }).click(); await p.waitForTimeout(1200)
+
+// find the adjust panel inputs
+const ids = await p.evaluate(()=>[...document.querySelectorAll('input')].map(e=>e.id+'|'+e.value))
+console.log('INPUTS', ids)
+const t = p.locator('input').nth(0)
+await p.getByText('Why this trip').click(); await p.waitForTimeout(500)
+const box = p.locator('details').first()
+console.log('=== WHY ==='); console.log(await box.innerText().catch(async()=> await p.locator('body').innerText()))
+await p.screenshot({ path: '.agency/screenshots/kabir-19-why.png', fullPage: true })
+// also check the "answered for you" affordance on this run
+await b.close()

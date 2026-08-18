@@ -1,26 +1,46 @@
-import { addDays, formatDayLabel, nightsLabel } from './dates'
+import { addDays, formatDayLabel, nightsLabel, weekdayIndex, weekdayName, weekdayPlural } from './dates'
 import { tagMatches } from './scoring'
 import type {
+  BaseTown,
   DayBlock,
   Destination,
   Experience,
   PlanContext,
   Stay,
   TravelLeg,
+  UnscheduledNote,
 } from './types'
 
 /**
  * R7 — one costed day-by-day itinerary. `days = nights + 1`, labels `Day 1` …
  * `Day ${days}`, the first day carries the outbound leg and the last the return.
  *
- * Selection is deterministic: experiences are sorted by
+ * Three rules were added by refinement round 1, and between them they replaced the
+ * old "deal N experiences and repeat a filler when you run out" loop:
+ *
+ * - **One base (fix 9).** The stay picks a base town; only experiences in that town
+ *   and within `MAX_MINUTES_FROM_BASE` of it can be scheduled. A day can no longer
+ *   pair two places 170km apart, because nothing 170km away is ever in the pool.
+ * - **Fixed days are data, not prose (fix 1).** An experience with a `fixedWeekday`
+ *   is placed only on a date whose weekday matches. Where the dates contain no such
+ *   day it is dropped and the plan says why, in `unscheduled`.
+ * - **No padding, and a free day on request (fix 6).** Every experience is dealt at
+ *   most once — a repeated morning was the product printing filler and calling it a
+ *   plan. Where supply runs out the day says so, and `ctx.freeDay` empties exactly
+ *   one middle day on purpose.
+ *
+ * Selection is still deterministic: experiences are sorted by
  * `(tagMatchScore desc, pricePerPerson asc, id asc)` — three keys and a unique id,
- * so no tie is possible — and dealt in that order. When the unique ones run out
- * (only possible past ~10 days) the `repeatable` ones cycle: they are priced ₹0 and
- * named honestly, so a long trip never invents paid activities that do not exist.
+ * so no tie is possible — and dealt in that order.
  */
 
 const SLOT_ORDER = { morning: 0, afternoon: 1, evening: 2 } as const
+
+/** Nothing further than this from the booked base is ever scheduled (fix 9). */
+export const MAX_MINUTES_FROM_BASE = 90
+
+/** docs/03-design.md §4 S5 — a day with nothing on it says so, in words. */
+export const FREE_DAY_NOTE = 'Nothing scheduled — this day is yours'
 
 /** 1 on each travel day, 2 on the others for trips of a week or less, 1 beyond that. */
 export function experiencesPerDay(ctx: PlanContext): number[] {
@@ -30,7 +50,18 @@ export function experiencesPerDay(ctx: PlanContext): number[] {
     const isTravelDay = day === 0 || day === ctx.days - 1
     counts.push(isTravelDay ? 1 : middleTarget)
   }
+  const free = freeDayIndex(ctx)
+  if (free !== null) counts[free] = 0
   return counts
+}
+
+/**
+ * R21 — which day is left empty when the user asks for one: the middle of the
+ * trip, never a travel day. `null` when the trip is too short to have a middle.
+ */
+export function freeDayIndex(ctx: PlanContext): number | null {
+  if (!ctx.freeDay || ctx.days < 3) return null
+  return Math.floor((ctx.days - 1) / 2)
 }
 
 export function sortExperiences(
@@ -38,6 +69,8 @@ export function sortExperiences(
   ctx: PlanContext,
 ): Experience[] {
   return [...experiences].sort((a, b) => {
+    // A filler is a filler: it is dealt only once and only after the real ones.
+    if (a.repeatable !== b.repeatable) return a.repeatable ? 1 : -1
     const byTags = tagMatches(b.tags, ctx.preferTags) - tagMatches(a.tags, ctx.preferTags)
     if (byTags !== 0) return byTags
     const byPrice = a.pricePerPerson - b.pricePerPerson
@@ -46,32 +79,148 @@ export function sortExperiences(
   })
 }
 
-/** The flat deal order: every experience the trip includes, longest trips included. */
-export function chooseExperiences(
-  destination: Destination,
-  ctx: PlanContext,
-): Experience[] {
-  const needed = experiencesPerDay(ctx).reduce((sum, n) => sum + n, 0)
-  const unique = sortExperiences(
-    destination.experiences.filter((e) => !e.repeatable),
-    ctx,
-  )
-  const fillers = sortExperiences(
-    destination.experiences.filter((e) => e.repeatable),
-    ctx,
-  )
+/** The town this (destination × stay) pair actually books (fix 9). */
+export function baseFor(destination: Destination, stay: Stay): BaseTown {
+  const found = destination.bases.find((base) => base.id === stay.baseId)
+  const fallback = destination.bases[0]
+  if (found !== undefined) return found
+  if (fallback !== undefined) return fallback
+  return { id: stay.baseId, name: destination.name }
+}
 
-  const chosen: Experience[] = unique.slice(0, needed)
-  if (fillers.length > 0) {
-    let i = 0
-    while (chosen.length < needed) {
-      const filler = fillers[i % fillers.length]
-      if (filler === undefined) break
-      chosen.push(filler)
-      i += 1
+/** Everything in the booked town and inside 90 minutes of it. Nothing else. */
+export function eligibleExperiences(
+  destination: Destination,
+  stay: Stay,
+): Experience[] {
+  const base = baseFor(destination, stay)
+  return destination.experiences.filter(
+    (experience) =>
+      experience.baseId === base.id &&
+      experience.minutesFromBase <= MAX_MINUTES_FROM_BASE,
+  )
+}
+
+/** Day indices, spread evenly, when there is less to schedule than there are days. */
+function spread(days: readonly number[], take: number): number[] {
+  if (take >= days.length) return [...days]
+  const out: number[] = []
+  for (let i = 0; i < take; i += 1) {
+    const index = days[Math.floor((i * days.length) / take)]
+    if (index !== undefined) out.push(index)
+  }
+  return out
+}
+
+export interface Itinerary {
+  base: BaseTown
+  /** Every experience the plan includes, in day order — what pricing charges for. */
+  chosen: readonly Experience[]
+  /** One entry per day, already sorted morning → evening. */
+  perDay: readonly (readonly Experience[])[]
+  /** R18 — fixed-day experiences we refused to place on the wrong day. */
+  unscheduled: readonly UnscheduledNote[]
+}
+
+function unscheduledLine(experience: Experience, weekday: number, reason: string): string {
+  return `Not scheduled: ${experience.name} — runs ${weekdayPlural(weekday)} only, ${reason}`
+}
+
+/**
+ * The whole schedule in one pass: fixed-day experiences claim their weekday first,
+ * then the rest are dealt round-robin so that every day gets one before any day
+ * gets two.
+ */
+export function scheduleItinerary(
+  destination: Destination,
+  stay: Stay,
+  ctx: PlanContext,
+): Itinerary {
+  const base = baseFor(destination, stay)
+  const capacity = experiencesPerDay(ctx)
+  const perDay: Experience[][] = capacity.map(() => [])
+  const dates: string[] = []
+  for (let i = 0; i < ctx.days; i += 1) dates.push(addDays(ctx.startDate, i))
+
+  const pool = sortExperiences(eligibleExperiences(destination, stay), ctx)
+  const placed = new Set<string>()
+  const unscheduled: UnscheduledNote[] = []
+
+  // ---- fixed-weekday experiences (R18). They are scarce, so they choose first.
+  for (const experience of pool) {
+    const weekday = experience.fixedWeekday
+    if (weekday === null) continue
+    const matching = dates
+      .map((date, index) => ({ index, weekday: weekdayIndex(date) }))
+      .filter((day) => day.weekday === weekday)
+
+    if (matching.length === 0) {
+      unscheduled.push({
+        experienceId: experience.id,
+        experienceName: experience.name,
+        line: unscheduledLine(
+          experience,
+          weekday,
+          `and your dates have no ${weekdayName(weekday)}`,
+        ),
+      })
+      continue
+    }
+
+    const slot = matching.find((day) => (perDay[day.index]?.length ?? 0) < (capacity[day.index] ?? 0))
+    if (slot === undefined) {
+      unscheduled.push({
+        experienceId: experience.id,
+        experienceName: experience.name,
+        line: unscheduledLine(
+          experience,
+          weekday,
+          `and there was no room on your ${weekdayName(weekday)}`,
+        ),
+      })
+      continue
+    }
+    perDay[slot.index]?.push(experience)
+    placed.add(experience.id)
+  }
+
+  // ---- everything else, dealt round-robin and never twice (R21).
+  // A fixed-day experience that could not claim its weekday is NOT eligible for a
+  // general slot: putting it anywhere is exactly the false claim R18 exists to
+  // stop. It is already recorded in `unscheduled` with the reason.
+  const queue = pool.filter(
+    (experience) => experience.fixedWeekday === null && !placed.has(experience.id),
+  )
+  let cursor = 0
+  const maxCapacity = capacity.reduce((max, n) => Math.max(max, n), 0)
+  for (let round = 0; round < maxCapacity; round += 1) {
+    const open: number[] = []
+    for (let index = 0; index < ctx.days; index += 1) {
+      const day = perDay[index]
+      if (day !== undefined && day.length === round && round < (capacity[index] ?? 0)) {
+        open.push(index)
+      }
+    }
+    const remaining = queue.length - cursor
+    if (remaining <= 0) break
+    for (const index of spread(open, Math.min(remaining, open.length))) {
+      const experience = queue[cursor]
+      if (experience === undefined) break
+      cursor += 1
+      perDay[index]?.push(experience)
     }
   }
-  return chosen
+
+  const sorted = perDay.map((day) =>
+    [...day].sort((a, b) => SLOT_ORDER[a.slot] - SLOT_ORDER[b.slot]),
+  )
+
+  return {
+    base,
+    perDay: sorted,
+    chosen: sorted.flat(),
+    unscheduled,
+  }
 }
 
 export function buildLegs(
@@ -80,6 +229,7 @@ export function buildLegs(
 ): [TravelLeg, TravelLeg] {
   const fare = destination.fares[ctx.origin]
   const perLeg = Math.round(fare.perPerson / 2)
+  const base = destination.bases[0]?.name ?? destination.name
   return [
     {
       kind: 'outbound',
@@ -88,7 +238,7 @@ export function buildLegs(
       perPerson: perLeg,
       date: ctx.startDate,
       from: ctx.origin,
-      to: destination.name,
+      to: base,
     },
     {
       kind: 'return',
@@ -96,7 +246,7 @@ export function buildLegs(
       hours: fare.hours,
       perPerson: fare.perPerson - perLeg,
       date: ctx.endDate,
-      from: destination.name,
+      from: base,
       to: ctx.origin,
     },
   ]
@@ -104,20 +254,14 @@ export function buildLegs(
 
 export function buildDays(
   stay: Stay,
-  chosen: readonly Experience[],
+  itinerary: Itinerary,
   legs: readonly [TravelLeg, TravelLeg],
   ctx: PlanContext,
 ): DayBlock[] {
-  const counts = experiencesPerDay(ctx)
   const days: DayBlock[] = []
   const roomsWord = ctx.rooms === 1 ? '1 room' : `${ctx.rooms} rooms`
-  let cursor = 0
 
   for (let index = 0; index < ctx.days; index += 1) {
-    const count = counts[index] ?? 1
-    const slice = chosen.slice(cursor, cursor + count)
-    cursor += count
-
     const date = addDays(ctx.startDate, index)
     const isFirst = index === 0
     const isLast = index === ctx.days - 1
@@ -126,9 +270,7 @@ export function buildDays(
     if (isFirst) dayLegs.push(legs[0])
     if (isLast) dayLegs.push(legs[1])
 
-    const experiences = [...slice].sort(
-      (a, b) => SLOT_ORDER[a.slot] - SLOT_ORDER[b.slot],
-    )
+    const experiences = itinerary.perDay[index] ?? []
 
     days.push({
       day: index + 1,
@@ -142,6 +284,7 @@ export function buildDays(
         : isLast
           ? { label: `Check out — ${stay.name}`, detail: '' }
           : null,
+      note: experiences.length === 0 && !isFirst && !isLast ? FREE_DAY_NOTE : null,
     })
   }
 

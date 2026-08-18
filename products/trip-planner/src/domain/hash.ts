@@ -26,10 +26,14 @@ export function fnv1a32(input: string): number {
 export function canonicalise(input: PlanInput, catalogueVersion: string): string {
   const { vibe, basics, answers } = input
   const answerPart = answers.map(([q, o]) => `${q}=${o}`).join(';')
+  const children = [...(basics.children ?? [])].sort((a, b) => a - b).join(',')
   // Appended only when non-empty, so an ordinary plan's ID is unchanged by R14
   // existing at all — and a restored plan is genuinely a different plan.
   const forced = [...(input.forceConstraints ?? [])].sort()
   const forcedPart = forced.length === 0 ? '' : `|forced:${forced.join(',')}`
+  // R22 — turning a destination down is a different plan, and its ID says so.
+  const excludedIds = [...(input.excludeDestinationIds ?? [])].sort()
+  const excludedPart = excludedIds.length === 0 ? '' : `|excluded:${excludedIds.join(',')}`
   return ([
     `v1`,
     `cat:${catalogueVersion}`,
@@ -38,9 +42,12 @@ export function canonicalise(input: PlanInput, catalogueVersion: string): string
     `end:${basics.endDate}`,
     `budget:${basics.budget}`,
     `travellers:${basics.travellers}`,
+    `adults:${basics.adults ?? basics.travellers}`,
+    `children:${children}`,
     `origin:${basics.origin}`,
+    `freeday:${basics.freeDay === true ? '1' : '0'}`,
     `answers:${answerPart}`,
-  ].join('|') + forcedPart)
+  ].join('|') + forcedPart + excludedPart)
 }
 
 /** Four base-36 characters of the hash — enough to distinguish, short enough to read. */

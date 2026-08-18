@@ -20,6 +20,8 @@ export default tseslint.config(
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
+      // Judge and QA scratch scripts, not product source.
+      '.agency/**',
     ],
   },
 

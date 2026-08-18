@@ -1361,3 +1361,90 @@ h1:focus:not(:focus-visible) {
     align-items: stretch;
   }
 }
+
+/* --------------------------------------- refinement round 1 (R18–R24) */
+
+/* R19 — the change notice, next to the total rather than in the small print. */
+.plan-hero__notice {
+  padding: var(--space-3) var(--space-4);
+  border-left: 4px solid var(--color-warn);
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-subtle);
+  color: var(--color-warn-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+/* R18 — what the plan refused to schedule, and why. */
+.unscheduled {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  list-style: none;
+}
+
+.unscheduled__item {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+/* R21 — a day with nothing on it reads as a decision, not an omission. */
+.dayblock__item--free .dayblock__label {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* R22 — the control that replaced two empty dashed boxes. */
+.altcard--reject {
+  border-style: dashed;
+  border-color: var(--color-accent);
+}
+
+.excluded {
+  margin-top: var(--space-4);
+}
+
+.excluded__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.excluded__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  list-style: none;
+}
+
+.excluded__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* R21 — the free-day switch sits under the adjust fields. */
+.adjust__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.adjust__checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-accent);
+}
+
+/* R24 — one age box per child. */
+.field__ages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}

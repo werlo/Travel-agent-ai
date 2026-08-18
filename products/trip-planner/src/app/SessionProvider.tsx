@@ -16,6 +16,7 @@ import type { Basics, ISODate, PlanSet } from '../domain/types'
 import {
   clearSession,
   readSession,
+  SCHEMA_VERSION,
   writeSession,
   type PersistedSession,
 } from '../storage/sessionStore'
@@ -56,6 +57,11 @@ interface SessionContextValue {
    * re-plan per keystroke is 46ms of jank (docs/02-architecture.md §7).
    */
   replan: (basics: Basics) => PlanSet | null
+  /**
+   * R22 — the plan we would show with these destinations turned down. `null` means
+   * the catalogue has nothing left, which the screen says rather than blanking.
+   */
+  replanExcluding: (excluded: readonly string[]) => PlanSet | null
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -85,6 +91,7 @@ function initFromStorage(): SessionState {
         ? 'recommended'
         : session.selectedVariant,
     planSet: session.planSet,
+    excluded: session.excluded,
   }
 }
 
@@ -103,7 +110,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state.vibe === null) return
     const session: PersistedSession = {
-      schema: 1,
+      schema: SCHEMA_VERSION,
       catalogueVersion: CATALOGUE.meta.version,
       phase: state.phase,
       vibe: state.vibe,
@@ -111,6 +118,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       answers: state.answers,
       selectedVariant: state.selectedVariant,
       planSet: state.planSet,
+      excluded: state.excluded,
     }
     const ok = writeSession(session)
     if (!ok && !persistenceFailed.current) {
@@ -199,9 +207,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [state],
   )
 
+  const replanExcluding = useCallback(
+    (excluded: readonly string[]): PlanSet | null => {
+      const next = plannerRequest({ ...state, excluded })
+      if (next === null) return null
+      // The last destination cannot be turned down: the screen says the catalogue
+      // is exhausted and keeps the plan it has (R22).
+      const remaining = CATALOGUE.destinations.filter(
+        (destination) => !excluded.includes(destination.id),
+      )
+      if (remaining.length === 0) return null
+      return generatePlanSet(next.input, CATALOGUE, {
+        defaultedQuestions: next.defaultedQuestions,
+      })
+    },
+    [state],
+  )
+
   const value = useMemo<SessionContextValue>(
-    () => ({ state, dispatch, today, restored, replan }),
-    [state, dispatch, today, restored, replan],
+    () => ({ state, dispatch, today, restored, replan, replanExcluding }),
+    [state, dispatch, today, restored, replan, replanExcluding],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

@@ -1,5 +1,6 @@
 import { formatDateRange, formatDuration, nightsLabel, travellersLabel } from './dates'
 import { formatRupees } from './money'
+import { partyLabel } from './party'
 import type { CatalogueMeta, DayBlock, Plan, TravelLeg } from './types'
 
 /**
@@ -40,7 +41,9 @@ export function dayLine(day: DayBlock): string {
   const stay = day.stayEntry === null ? [] : [stayText(day.stayEntry)]
   const experiences = day.experiences.map((experience) => experience.name)
 
-  const items = [...outbound, ...stay, ...experiences, ...inbound]
+  // R21 — an empty day says so in the paste too, rather than trailing a colon.
+  const note = day.note === null ? [] : [day.note]
+  const items = [...outbound, ...stay, ...experiences, ...note, ...inbound]
   return `${day.label} — ${day.dateLabel}: ${items.join(' · ')}`
 }
 
@@ -48,27 +51,30 @@ export function toPlainText(plan: Plan, meta: CatalogueMeta): string {
   const { cost } = plan
 
   const head = [
-    `${plan.destinationName} — ${nightsLabel(plan.nights)}`,
+    `${plan.destinationName} — ${nightsLabel(plan.nights)}, based in ${plan.baseName}`,
     `${formatDateRange(plan.startDate, plan.endDate)} · ${travellersLabel(
       plan.travellers,
     )} · from ${plan.origin}`,
-    `Total ${formatRupees(cost.partyTotal)} for ${plan.travellers} (${formatRupees(
-      cost.perPerson,
-    )} per person)`,
+    `Total ${formatRupees(cost.partyTotal)} for ${partyLabel(
+      plan.adults,
+      plan.children,
+    )} (${formatRupees(cost.perPerson)} per person), incl. GST`,
   ]
 
   const days = plan.days.map(dayLine)
 
   const tail = [
-    `Stay: ${plan.stay.name}, ${nightsLabel(plan.stay.nights)}, ${plan.stay.rooms} ${
-      plan.stay.rooms === 1 ? 'room' : 'rooms'
-    }`,
+    `Stay: ${plan.stay.name} (${plan.stay.baseName}), ${nightsLabel(plan.stay.nights)}, ${
+      plan.stay.rooms
+    } ${plan.stay.rooms === 1 ? 'room' : 'rooms'}`,
     [
       `Travel ${formatRupees(cost.travel)}`,
       `Stay ${formatRupees(cost.stay)}`,
       `Experiences ${formatRupees(cost.experiences)}`,
       `Local allowance ${formatRupees(cost.localAllowance)}`,
+      `Seasonal ${formatRupees(cost.seasonal)}`,
     ].join(' · '),
+    ...plan.unscheduled.map((note) => note.line),
   ]
 
   const stamp = [

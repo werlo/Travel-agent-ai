@@ -1,5 +1,6 @@
-import { nightsBetween, parseISO } from './dates'
-import { ORIGIN_CITIES, type Basics, type OriginCity } from './types'
+import { nightsBetween, parseDMY } from './dates'
+import { CHILD_INPUT_MAX_AGE, CHILD_INPUT_MIN_AGE } from './party'
+import { ORIGIN_CITIES, type Basics, type ISODate, type OriginCity } from './types'
 
 /**
  * R3 — the basics are rejected inline, without advancing. Every string below is
@@ -11,30 +12,44 @@ import { ORIGIN_CITIES, type Basics, type OriginCity } from './types'
  * number (docs/02-architecture.md §12 Deviations).
  */
 
-export type BasicsField = 'startDate' | 'endDate' | 'budget' | 'travellers' | 'origin'
+export type BasicsField =
+  | 'startDate'
+  | 'endDate'
+  | 'budget'
+  | 'travellers'
+  | 'children'
+  | 'origin'
 
 export const BASICS_FIELD_ORDER: readonly BasicsField[] = [
   'startDate',
   'endDate',
   'budget',
   'travellers',
+  'children',
   'origin',
 ]
 
 export type BasicsErrors = Partial<Record<BasicsField, string>>
 
 export interface RawBasics {
+  /** Typed as DD/MM/YYYY; an ISO string is accepted too (fix 2). */
   startDate: string
   endDate: string
   budget: string
+  /** Adults, priced at the full fare. */
   travellers: string
+  /** One age per child, 0–17 (R24). */
+  childAges?: readonly string[]
   origin: string
+  freeDay?: boolean
 }
 
 export const MAX_NIGHTS = 21
 export const MIN_BUDGET = 5000
 export const MIN_TRAVELLERS = 1
 export const MAX_TRAVELLERS = 12
+
+export const MAX_CHILDREN = 8
 
 export const MESSAGES = {
   startMissing: 'Enter a start date',
@@ -45,6 +60,8 @@ export const MESSAGES = {
   budgetTooLow: 'Enter a budget of at least ₹5,000',
   travellersMissing: 'Enter how many people are travelling',
   travellersOutOfRange: 'Travellers must be between 1 and 12',
+  childAgeOutOfRange: `Enter each child's age between ${CHILD_INPUT_MIN_AGE} and ${CHILD_INPUT_MAX_AGE}`,
+  partyTooLarge: 'Adults and children together must be 12 or fewer',
   originUnknown: 'Choose a departure city from the list',
 } as const
 
@@ -63,15 +80,15 @@ export interface ValidationResult {
 export function validateBasics(raw: RawBasics): ValidationResult {
   const errors: BasicsErrors = {}
 
-  const start = parseISO(raw.startDate.trim())
-  const end = parseISO(raw.endDate.trim())
+  const start: ISODate | null = parseDMY(raw.startDate)
+  const end: ISODate | null = parseDMY(raw.endDate)
 
   if (start === null) errors.startDate = MESSAGES.startMissing
   if (end === null) errors.endDate = MESSAGES.endMissing
 
   let nights = Number.NaN
   if (start !== null && end !== null) {
-    nights = nightsBetween(raw.startDate.trim(), raw.endDate.trim())
+    nights = nightsBetween(start, end)
     if (nights <= 0) errors.endDate = MESSAGES.endBeforeStart
     else if (nights > MAX_NIGHTS) errors.endDate = MESSAGES.tooLong
   }
@@ -98,6 +115,30 @@ export function validateBasics(raw: RawBasics): ValidationResult {
     }
   }
 
+  // R24 — children are counted and priced, not quietly folded into "travellers".
+  const rawAges = (raw.childAges ?? []).map((age) => age.trim())
+  const children: number[] = []
+  for (const age of rawAges) {
+    if (!DIGITS_ONLY.test(age)) {
+      errors.children = MESSAGES.childAgeOutOfRange
+      continue
+    }
+    const value = Number(age)
+    if (value < CHILD_INPUT_MIN_AGE || value > CHILD_INPUT_MAX_AGE) {
+      errors.children = MESSAGES.childAgeOutOfRange
+      continue
+    }
+    children.push(value)
+  }
+  if (rawAges.length > MAX_CHILDREN) errors.children = MESSAGES.partyTooLarge
+  if (
+    errors.travellers === undefined &&
+    Number.isFinite(travellers) &&
+    travellers + rawAges.length > MAX_TRAVELLERS
+  ) {
+    errors.children = MESSAGES.partyTooLarge
+  }
+
   const origin = raw.origin.trim()
   if (!isOrigin(origin)) errors.origin = MESSAGES.originUnknown
 
@@ -109,11 +150,14 @@ export function validateBasics(raw: RawBasics): ValidationResult {
   return {
     errors,
     basics: {
-      startDate: raw.startDate.trim(),
-      endDate: raw.endDate.trim(),
+      startDate: start,
+      endDate: end,
       budget,
-      travellers,
+      travellers: travellers + children.length,
+      adults: travellers,
+      children,
       origin,
+      freeDay: raw.freeDay === true,
     },
   }
 }

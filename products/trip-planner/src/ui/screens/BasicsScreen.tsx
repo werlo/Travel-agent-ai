@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { addDays, firstOfNextMonth, nightsBetween, nightsLabel } from '../../domain/dates'
+import {
+  addDays,
+  DATE_FORMAT_HINT,
+  firstOfNextMonth,
+  formatDMY,
+  nightsBetween,
+  nightsLabel,
+  parseDMY,
+} from '../../domain/dates'
+import { CHILD_AGE_HINT, CHILD_INPUT_MAX_AGE, CHILD_INPUT_MIN_AGE } from '../../domain/party'
 import { ORIGIN_CITIES, type Basics, type ISODate } from '../../domain/types'
 import {
   BASICS_FIELD_ORDER,
@@ -23,8 +32,10 @@ import { draftSummaryFacts } from '../format'
  */
 
 const HINTS: Partial<Record<BasicsField, string>> = {
+  startDate: DATE_FORMAT_HINT,
   budget: 'Everything in: travel, stay, experiences and day-to-day spending.',
-  travellers: 'Priced per adult traveller. One room per two travellers, rounded up.',
+  travellers: 'Priced at the full adult fare. One room per two travellers, rounded up.',
+  children: CHILD_AGE_HINT,
   origin: 'Six metros for now: Mumbai, Delhi, Bengaluru, Chennai, Kolkata, Hyderabad.',
 }
 
@@ -32,27 +43,34 @@ const LABELS: Record<BasicsField, string> = {
   startDate: 'Start date',
   endDate: 'End date',
   budget: 'Total budget for the whole party',
-  travellers: 'Travellers',
+  travellers: 'Adults',
+  children: 'Children',
   origin: 'Flying from',
 }
+
+export const MAX_CHILD_FIELDS = 8
 
 export function defaultRawBasics(today: ISODate, saved: Basics | null): RawBasics {
   if (saved !== null) {
     return {
-      startDate: saved.startDate,
-      endDate: saved.endDate,
+      startDate: formatDMY(saved.startDate),
+      endDate: formatDMY(saved.endDate),
       budget: String(saved.budget),
-      travellers: String(saved.travellers),
+      travellers: String(saved.adults),
+      childAges: saved.children.map((age) => String(age)),
       origin: saved.origin,
+      freeDay: saved.freeDay,
     }
   }
   const startDate = firstOfNextMonth(today)
   return {
-    startDate,
-    endDate: addDays(startDate, 5),
+    startDate: formatDMY(startDate),
+    endDate: formatDMY(addDays(startDate, 5)),
     budget: '60000',
     travellers: '2',
+    childAges: [],
     origin: 'Bengaluru',
+    freeDay: false,
   }
 }
 
@@ -95,9 +113,14 @@ export function BasicsScreen({
     else formRef.current?.querySelector<HTMLElement>(`#field-${focusRequest.target}`)?.focus()
   }, [focusRequest])
 
-  const nights = nightsBetween(raw.startDate, raw.endDate)
-  const endHint =
+  const startISO = parseDMY(raw.startDate)
+  const endISO = parseDMY(raw.endDate)
+  const nights =
+    startISO === null || endISO === null ? Number.NaN : nightsBetween(startISO, endISO)
+  const endHint = `${
     Number.isFinite(nights) && nights > 0 ? nightsLabel(nights) : 'Pick a date after the start'
+  } · ${DATE_FORMAT_HINT}`
+  const childAges = raw.childAges ?? []
 
   const listed = orderedErrors(errors)
   const summaryList = orderedErrors(summaryErrors)
@@ -122,6 +145,24 @@ export function BasicsScreen({
         setSummaryErrors(without)
       }
     }
+  }
+
+  const setChildCount = (value: string): void => {
+    const count = Math.max(0, Math.min(MAX_CHILD_FIELDS, Number(value) || 0))
+    setRaw((current) => {
+      const ages = [...(current.childAges ?? [])]
+      while (ages.length < count) ages.push('')
+      ages.length = count
+      return { ...current, childAges: ages }
+    })
+  }
+
+  const setChildAge = (index: number, value: string): void => {
+    setRaw((current) => {
+      const ages = [...(current.childAges ?? [])]
+      ages[index] = value
+      return { ...current, childAges: ages }
+    })
   }
 
   const blurField = (field: BasicsField): void => {
@@ -194,13 +235,19 @@ export function BasicsScreen({
             <input
               id="field-startDate"
               className="field__control"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={DATE_FORMAT_HINT}
               value={raw.startDate}
               aria-invalid={errors.startDate !== undefined}
-              aria-describedby={describedBy('startDate', false, errors.startDate !== undefined)}
+              aria-describedby={describedBy('startDate', true, errors.startDate !== undefined)}
               onChange={(e) => setField('startDate', e.target.value)}
               onBlur={() => blurField('startDate')}
             />
+            <p id={hintId('startDate')} className="field__hint">
+              {HINTS.startDate}
+            </p>
             <FieldMessage>
               {errors.startDate !== undefined ? (
                 <FieldError
@@ -219,7 +266,10 @@ export function BasicsScreen({
             <input
               id="field-endDate"
               className="field__control"
-              type="date"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={DATE_FORMAT_HINT}
               value={raw.endDate}
               aria-invalid={errors.endDate !== undefined}
               aria-describedby={describedBy('endDate', true, errors.endDate !== undefined)}
@@ -306,6 +356,59 @@ export function BasicsScreen({
               ) : null}
             </FieldMessage>
           </div>
+        </div>
+
+        {/* R24 — children are counted and priced at a published rate (A12). */}
+        <div className="field">
+          <label className="field__label" htmlFor="field-children">
+            {LABELS.children}
+          </label>
+          <input
+            id="field-children"
+            className="field__control"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={MAX_CHILD_FIELDS}
+            value={String(childAges.length)}
+            aria-invalid={errors.children !== undefined}
+            aria-describedby={describedBy('children', true, errors.children !== undefined)}
+            onChange={(e) => setChildCount(e.target.value)}
+          />
+          <p id={hintId('children')} className="field__hint">
+            {HINTS.children}
+          </p>
+          {childAges.length > 0 ? (
+            <div className="field__ages">
+              {childAges.map((age, index) => (
+                <div className="field field--age" key={`child-age-${index}`}>
+                  <label className="field__label" htmlFor={`field-child-age-${index}`}>
+                    {`Child ${index + 1} age`}
+                  </label>
+                  <input
+                    id={`field-child-age-${index}`}
+                    className="field__control"
+                    type="number"
+                    inputMode="numeric"
+                    min={CHILD_INPUT_MIN_AGE}
+                    max={CHILD_INPUT_MAX_AGE}
+                    value={age}
+                    onChange={(e) => setChildAge(index, e.target.value)}
+                    onBlur={() => blurField('children')}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <FieldMessage>
+            {errors.children !== undefined ? (
+              <FieldError
+                field="children"
+                message={errors.children}
+                alert={listed[0]?.[0] === 'children'}
+              />
+            ) : null}
+          </FieldMessage>
         </div>
 
         <div className="field">

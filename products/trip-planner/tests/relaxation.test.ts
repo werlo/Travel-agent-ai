@@ -33,7 +33,10 @@ const BASICS: Basics = {
   endDate: '2026-10-15',
   budget: 60000,
   travellers: 2,
+  adults: 2,
+  children: [],
   origin: 'Bengaluru',
+  freeDay: false,
 }
 
 function inputFor(

@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toPlainText } from '../../domain/export'
 import { formatRupees } from '../../domain/money'
+import { ADULT_AGE_NOTE, CHILD_RULE } from '../../domain/party'
+import { TAX_NOTE } from '../../domain/pricing'
+import { SEASON_BASIS_NOTE } from '../../domain/season'
 import type {
   Basics,
   BudgetStatus,
@@ -16,7 +19,7 @@ import { DayBlockCard } from '../components/DayBlock'
 import { Icon } from '../components/Icon'
 import { RelaxBanner } from '../components/RelaxBanner'
 import { WhyThisTrip } from '../components/WhyThisTrip'
-import { ExportDialog } from './ExportDialog'
+import { CLIPBOARD_FAILED_MESSAGE, ExportDialog } from './ExportDialog'
 import { defaultedLabel, planFacts, planIdLine } from '../format'
 
 /**
@@ -48,6 +51,12 @@ export interface PlanScreenProps {
   selectedVariant: PlanVariant
   restoreRequested: boolean
   restored: PlanSet | null
+  /** R19 — what the last re-plan changed without being asked to. */
+  changeNotice: string | null
+  /** R22 — every destination that fits has now been turned down. */
+  rejectExhausted: boolean
+  onReject: (destinationId: string) => void
+  onUndoReject: (destinationId: string) => void
   onAnswerDefaulted: () => void
   onSelectVariant: (variant: PlanVariant) => void
   /** R12 — apply new basics and re-plan without re-asking anything. */
@@ -65,6 +74,10 @@ export function PlanScreen({
   selectedVariant,
   restoreRequested,
   restored,
+  changeNotice,
+  rejectExhausted,
+  onReject,
+  onUndoReject,
   onAnswerDefaulted,
   onSelectVariant,
   onAdjust,
@@ -78,8 +91,11 @@ export function PlanScreen({
   const { cost } = plan
 
   const [exporting, setExporting] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [clipboardFailure, setClipboardFailure] = useState<string | null>(null)
   const copyButtonRef = useRef<HTMLButtonElement>(null)
   const wasExporting = useRef(false)
+  const copiedTimer = useRef<number | null>(null)
 
   /**
    * docs/03-design.md §6.1 — closing S6 returns focus to `Copy as text`.
@@ -97,6 +113,41 @@ export function PlanScreen({
   // Cheap, but it is rebuilt on every plan change and nothing else; the plan ID is
   // the identity of the whole plan, so it is the only dependency there can be.
   const exportText = useMemo(() => toPlainText(plan, meta), [plan, meta])
+
+  useEffect(
+    () => () => {
+      if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+    },
+    [],
+  )
+
+  /**
+   * R17 (amended) — the button copies. It used to open a dialog and leave the user
+   * to press Ctrl+C, which is not what "Copy as text" says it does. The dialog is
+   * still built, and it is still where an insecure origin or a denied permission
+   * ends up, with a message that names the failure.
+   */
+  const copyAsText = useCallback(async (): Promise<void> => {
+    try {
+      const clipboard = navigator.clipboard
+      if (clipboard === undefined || typeof clipboard.writeText !== 'function') {
+        throw new Error('clipboard unavailable')
+      }
+      await clipboard.writeText(exportText)
+      setClipboardFailure(null)
+      setCopied(true)
+      if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current)
+      copiedTimer.current = window.setTimeout(() => {
+        copiedTimer.current = null
+        setCopied(false)
+      }, 2000)
+    } catch (error) {
+      console.warn('[compass] E-CLIPBOARD', error)
+      setCopied(false)
+      setClipboardFailure(CLIPBOARD_FAILED_MESSAGE)
+      setExporting(true)
+    }
+  }, [exportText])
 
   return (
     <div className="screen screen--plan">
@@ -124,6 +175,12 @@ export function PlanScreen({
             <p className="plan-hero__perperson">{formatRupees(cost.perPerson)} per person</p>
           </div>
         </div>
+        {/* R19 — the substitution is stated where the total is, not in the small print. */}
+        {changeNotice !== null ? (
+          <p className="plan-hero__notice" data-notice="change">
+            {changeNotice}
+          </p>
+        ) : null}
         <p className={`badge ${BADGE_VARIANT[plan.budget.status]}`}>{plan.budget.label}</p>
         <p className="plan-hero__facts">{planFacts(plan)}</p>
         {planSet.defaultedQuestions > 0 ? (
@@ -141,12 +198,15 @@ export function PlanScreen({
             type="button"
             className="btn btn--primary"
             ref={copyButtonRef}
-            onClick={() => setExporting(true)}
+            onClick={() => void copyAsText()}
           >
-            <Icon name="copy" size={16} className="btn__glyph" />
-            Copy as text
+            <Icon name={copied ? 'check' : 'copy'} size={16} className="btn__glyph" />
+            {copied ? 'Copied' : 'Copy as text'}
           </button>
         </div>
+        <p className="visually-hidden" role="status" aria-live="polite">
+          {copied ? 'Copied' : ''}
+        </p>
         <p className="plan-hero__id">{planIdLine(plan, planSet.catalogueVersion)}</p>
       </div>
 
@@ -168,6 +228,16 @@ export function PlanScreen({
                 <DayBlockCard key={day.day} day={day} />
               ))}
             </div>
+            {/* R18 — what we would not put on a day that contradicts it. */}
+            {plan.unscheduled.length > 0 ? (
+              <ul className="unscheduled" data-unscheduled="true">
+                {plan.unscheduled.map((note) => (
+                  <li key={note.experienceId} className="unscheduled__item">
+                    {note.line}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section>
 
           <section className="plan-section plan-section--why" aria-label="Why this trip">
@@ -180,13 +250,14 @@ export function PlanScreen({
             <h2 id="plan-cost" className="plan-section__title">
               What makes up {formatRupees(cost.partyTotal)}
             </h2>
-            <CostTable cost={cost} travellers={plan.travellers} />
+            <CostTable cost={cost} adults={plan.adults} childCount={plan.children} />
+            <p className="plan-section__footnote">{TAX_NOTE}</p>
             <p className="plan-section__footnote">
-              Priced per adult traveller. One room per two travellers, rounded up.
-              Children aren&rsquo;t priced separately yet.
+              {CHILD_RULE} {ADULT_AGE_NOTE} One room per two travellers, rounded up.
             </p>
+            <p className="plan-section__footnote">{SEASON_BASIS_NOTE}</p>
             <p className="plan-section__footnote">
-              Stay: {plan.stay.name}, {plan.stay.nights}{' '}
+              Stay: {plan.stay.name} in {plan.stay.baseName}, {plan.stay.nights}{' '}
               {plan.stay.nights === 1 ? 'night' : 'nights'}, {plan.stay.rooms}{' '}
               {plan.stay.rooms === 1 ? 'room' : 'rooms'}.
             </p>
@@ -196,6 +267,9 @@ export function PlanScreen({
             planSet={planSet}
             selected={selectedVariant}
             onSelect={onSelectVariant}
+            onReject={() => onReject(plan.destinationId)}
+            onUndoReject={onUndoReject}
+            exhausted={rejectExhausted}
           />
 
           <AdjustPanel basics={basics} onApply={onAdjust} />
@@ -205,6 +279,7 @@ export function PlanScreen({
       {exporting ? (
         <ExportDialog
           text={exportText}
+          failureMessage={clipboardFailure}
           onClose={() => setExporting(false)}
         />
       ) : null}

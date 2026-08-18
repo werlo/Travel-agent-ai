@@ -18,9 +18,10 @@ import {
 import { nightsBetween } from './dates'
 import { explain } from './explain'
 import { canonicalise, planId } from './hash'
-import { buildDays, buildLegs, chooseExperiences } from './itinerary'
+import { buildDays, buildLegs, scheduleItinerary, type Itinerary } from './itinerary'
 import { roomsFor } from './money'
 import { priceCandidate } from './pricing'
+import { seasonFor } from './season'
 import { QUESTION_GRAPH } from './questions/graph'
 import { constraintsFor, preferredTags } from './questions/path'
 import { scoreCandidate } from './scoring'
@@ -30,7 +31,6 @@ import type {
   ConstraintSpec,
   CostBreakdown,
   Destination,
-  Experience,
   Plan,
   PlanContext,
   PlanInput,
@@ -58,7 +58,8 @@ import type {
 export interface Candidate {
   destination: Destination
   stay: Stay
-  experiences: readonly Experience[]
+  /** The whole schedule: one base, no wrong-day placements, no repeats. */
+  itinerary: Itinerary
   cost: CostBreakdown
   score: number
 }
@@ -66,6 +67,17 @@ export interface Candidate {
 export function planContextFor(input: PlanInput, graph: QuestionGraph): PlanContext {
   const { basics } = input
   const nights = nightsBetween(basics.startDate, basics.endDate)
+  const children = basics.children ?? []
+  // `travellers` is the party size every requirement quotes, so it wins any
+  // disagreement: a basics record written before R24 existed carries no split at
+  // all, and one that carries an inconsistent split is normalised rather than
+  // priced for a party nobody described.
+  const declared = basics.adults ?? basics.travellers - children.length
+  const adults =
+    declared + children.length === basics.travellers
+      ? declared
+      : Math.max(0, basics.travellers - children.length)
+  const travellers = adults + children.length
   return {
     vibe: input.vibe,
     origin: basics.origin,
@@ -73,9 +85,13 @@ export function planContextFor(input: PlanInput, graph: QuestionGraph): PlanCont
     endDate: basics.endDate,
     nights,
     days: nights + 1,
-    travellers: basics.travellers,
-    rooms: roomsFor(basics.travellers),
+    travellers,
+    adults,
+    children,
+    rooms: roomsFor(travellers),
     budget: basics.budget,
+    freeDay: basics.freeDay === true,
+    season: seasonFor(basics.startDate, basics.endDate),
     preferTags: preferredTags(graph, input.answers),
   }
 }
@@ -92,13 +108,15 @@ export function buildCandidates(
 ): Candidate[] {
   const candidates: Candidate[] = []
   for (const destination of catalogue.destinations) {
-    const experiences = chooseExperiences(destination, ctx)
     for (const stay of destination.stays) {
-      const cost = priceCandidate(destination, stay, experiences, ctx)
+      // The schedule depends on the stay now: the stay picks the base town, and
+      // the base town decides what can be reached from it (fix 9).
+      const itinerary = scheduleItinerary(destination, stay, ctx)
+      const cost = priceCandidate(destination, stay, itinerary.chosen, ctx)
       candidates.push({
         destination,
         stay,
-        experiences,
+        itinerary,
         cost,
         score: scoreCandidate(destination, stay, cost.partyTotal, ctx),
       })
@@ -300,7 +318,7 @@ function toPlan(
   why: Why,
 ): Plan {
   const legs = buildLegs(candidate.destination, ctx)
-  const days = buildDays(candidate.stay, candidate.experiences, legs, ctx)
+  const days = buildDays(candidate.stay, candidate.itinerary, legs, ctx)
   const canonical = canonicalise(input, catalogue.meta.version)
 
   return {
@@ -319,16 +337,22 @@ function toPlan(
     endDate: ctx.endDate,
     nights: ctx.nights,
     travellers: ctx.travellers,
+    adults: ctx.adults,
+    children: ctx.children.length,
     origin: ctx.origin,
+    baseName: candidate.itinerary.base.name,
     stay: {
       id: candidate.stay.id,
       name: candidate.stay.name,
       tier: candidate.stay.tier,
       nights: ctx.nights,
       rooms: ctx.rooms,
+      pricePerRoomPerNight: candidate.stay.pricePerRoomPerNight,
+      baseName: candidate.itinerary.base.name,
     },
     legs,
     days,
+    unscheduled: candidate.itinerary.unscheduled,
     cost: candidate.cost,
     budget: affordable
       ? budgetLineFor(candidate.cost.partyTotal, ctx.budget)
@@ -352,7 +376,21 @@ export function generatePlanSet(
   const graph = options.graph ?? QUESTION_GRAPH
   const ctx = planContextFor(input, graph)
 
-  const candidates = buildCandidates(catalogue, ctx)
+  // R22 — a destination the user has turned down is not a candidate, is not a
+  // rejected-alternative line, and is not a Saver. It is simply not in the search.
+  const excludedIds = new Set(input.excludeDestinationIds ?? [])
+  const excluded = catalogue.destinations
+    .filter((destination) => excludedIds.has(destination.id))
+    .map((destination) => ({ id: destination.id, name: destination.name }))
+  const searchable: CatalogueSnapshot =
+    excludedIds.size === 0
+      ? catalogue
+      : {
+          meta: catalogue.meta,
+          destinations: catalogue.destinations.filter((d) => !excludedIds.has(d.id)),
+        }
+
+  const candidates = buildCandidates(searchable, ctx)
   if (candidates.length === 0) {
     throw new Error('[compass] E-CATALOGUE-EMPTY: no destinations to plan against')
   }
@@ -438,5 +476,6 @@ export function generatePlanSet(
     catalogueVersion: catalogue.meta.version,
     snapshotDate: catalogue.meta.snapshotDate,
     candidatesEvaluated: candidates.length,
+    excluded,
   }
 }

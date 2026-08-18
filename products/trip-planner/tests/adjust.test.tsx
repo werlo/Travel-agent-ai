@@ -33,7 +33,7 @@ async function planFor(vibe: string, trip: Trip = {}): Promise<User> {
   if (trip.startDate !== undefined) fill('Start date', trip.startDate)
   if (trip.endDate !== undefined) fill('End date', trip.endDate)
   if (trip.budget !== undefined) fill('Total budget for the whole party', trip.budget)
-  if (trip.travellers !== undefined) fill('Travellers', trip.travellers)
+  if (trip.travellers !== undefined) fill('Adults', trip.travellers)
 
   await user.click(screen.getByRole('button', { name: 'Continue' }))
   await screen.findByText(/^Question 1 of \d$/)
@@ -51,18 +51,18 @@ function text(selector: string): string {
   return document.querySelector(selector)?.textContent ?? ''
 }
 
-/** `Return flights, ₹9,400 per traveller × 2` -> 9400. */
+/** `Return flights, ₹9,400 per adult × 2, incl. GST` -> 9400. */
 function fareFromBasis(): number {
   const basis = document.querySelector('[data-cost="travel"]')
     ?.closest('tr')
     ?.querySelector('.costtable__basis')?.textContent
-  const match = /₹([\d,]+) per traveller/.exec(basis ?? '')
-  if (match === null) throw new Error(`no per-traveller fare in "${basis ?? ''}"`)
+  const match = /₹([\d,]+) per adult/.exec(basis ?? '')
+  if (match === null) throw new Error(`no per-adult fare in "${basis ?? ''}"`)
   return Number(match[1]?.replace(/,/g, ''))
 }
 
 async function setTravellers(user: User, value: string): Promise<void> {
-  const field = screen.getByLabelText('Travellers')
+  const field = screen.getByLabelText('Adults')
   await user.clear(field)
   await user.type(field, value)
 }
@@ -145,7 +145,7 @@ describe('the adjust panel (R12)', () => {
     // `Update plan` disables itself once the values match again, so focus cannot
     // stay on it; it returns to the field just edited rather than to <body>.
     expect(screen.getByRole('button', { name: 'Update plan' })).toBeDisabled()
-    expect(screen.getByLabelText('Travellers')).toHaveFocus()
+    expect(screen.getByLabelText('Adults')).toHaveFocus()
   })
 
   it('announces the new plan in the live region', async () => {
@@ -154,9 +154,12 @@ describe('the adjust panel (R12)', () => {
     await user.click(screen.getByRole('button', { name: 'Update plan' }))
 
     await waitFor(() => {
-      // The app-level polite region (the SummaryBar is also role=status).
-      const live = document.querySelector('p.visually-hidden[role="status"]')
-      expect(live?.textContent ?? '').toMatch(
+      // The app-level polite region (the SummaryBar and the copy status are also
+      // role=status, so every polite region is scanned rather than the first).
+      const live = [...document.querySelectorAll('p.visually-hidden[role="status"]')]
+        .map((node) => node.textContent ?? '')
+        .find((value) => value.startsWith('Plan updated.'))
+      expect(live ?? '').toMatch(
         /^Plan updated\. .+, ₹[\d,]+ total for 4 travellers\.$/,
       )
     })
@@ -184,8 +187,8 @@ describe('the adjust panel (R12)', () => {
     await user.click(screen.getByRole('button', { name: 'Update plan' }))
 
     expect(await screen.findByText('Travellers must be between 1 and 12')).toBeInTheDocument()
-    expect(screen.getByLabelText('Travellers')).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByLabelText('Travellers')).toHaveFocus()
+    expect(screen.getByLabelText('Adults')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText('Adults')).toHaveFocus()
     expect(text('.plan-hero__id')).toBe(before.id)
     expect(amount('total')).toBe(before.total)
   })

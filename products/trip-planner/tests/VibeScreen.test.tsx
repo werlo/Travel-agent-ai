@@ -39,7 +39,7 @@ describe('S1 — Vibe screen (R1)', () => {
       screen.getByRole('heading', { level: 1, name: 'What kind of trip do you want?' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/Pick a vibe\. We’ll ask three or four quick questions/),
+      screen.getByText(/Pick a vibe\. We’ll ask four quick questions — or skip them and we’ll/),
     ).toBeInTheDocument()
     expect(screen.getByText('Sand, sea, and not much of a plan.')).toBeInTheDocument()
     expect(screen.getByText('Nobody around, nothing scheduled.')).toBeInTheDocument()

@@ -8,6 +8,15 @@ import type { ISODate } from './types'
  */
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const
 const MONTHS = [
   'Jan',
   'Feb',
@@ -107,11 +116,59 @@ export function firstOfNextMonth(from: ISODate): ISODate {
   return toISO({ year, month, day: 1 })
 }
 
+/** 0 = Sunday … 6 = Saturday. -1 when the string is not a date (fix 1). */
+export function weekdayIndex(date: ISODate): number {
+  const civil = parseISO(date)
+  if (civil === null) return -1
+  return ((daysFromCivil(civil) % 7) + 11) % 7
+}
+
 export function weekdayShort(date: ISODate): string {
+  const index = weekdayIndex(date)
+  if (index < 0) return ''
+  return WEEKDAYS[index] ?? ''
+}
+
+/** 'Wednesday' — the word the R18 note uses. */
+export function weekdayName(index: number): string {
+  return WEEKDAY_NAMES[index] ?? ''
+}
+
+/** 'Wednesdays' — the word the availability label uses. */
+export function weekdayPlural(index: number): string {
+  const name = weekdayName(index)
+  return name === '' ? '' : `${name}s`
+}
+
+/** 'DD/MM/YYYY' — shown under every date field (fix 2). */
+export const DATE_FORMAT_HINT = 'DD/MM/YYYY'
+
+/** '2026-10-10' -> '10/10/2026'. Empty string for anything unparseable. */
+export function formatDMY(date: ISODate): string {
   const civil = parseISO(date)
   if (civil === null) return ''
-  const index = ((daysFromCivil(civil) % 7) + 11) % 7
-  return WEEKDAYS[index] ?? ''
+  const d = String(civil.day).padStart(2, '0')
+  const m = String(civil.month).padStart(2, '0')
+  return `${d}/${m}/${String(civil.year).padStart(4, '0')}`
+}
+
+const DMY_SHAPE = /^(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4})$/
+
+/**
+ * '10/10/2026' -> '2026-10-10'. Day first, always: the product prices in rupees
+ * and flies from six Indian metros, and MM/DD is the one order nobody here means
+ * (fix 2). An ISO string is accepted too, because that is what a saved session and
+ * a `type=date` control both hold.
+ */
+export function parseDMY(value: string): ISODate | null {
+  const text = value.trim()
+  if (text === '') return null
+  if (ISO_SHAPE.test(text)) return parseISO(text) === null ? null : text
+  const match = DMY_SHAPE.exec(text)
+  if (match === null) return null
+  const [, d, m, y] = match
+  const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  return parseISO(iso) === null ? null : iso
 }
 
 export function monthShort(month: number): string {

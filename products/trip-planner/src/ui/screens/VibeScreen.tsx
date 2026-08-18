@@ -38,9 +38,15 @@ export function VibeScreen({ selected, onSelect, onContinue }: VibeScreenProps) 
       <h1 className="screen__title" tabIndex={-1}>
         What kind of trip do you want?
       </h1>
+      {/*
+        R1 (amended) — the escape hatch is advertised here, not discovered one
+        screen later. "three or four quick questions" was the line that nearly
+        cost us a judge before he had clicked anything.
+      */}
       <p className="screen__sub">
-        Pick a vibe. We&rsquo;ll ask three or four quick questions, then hand you one costed
-        trip &mdash; where to go, where to stay, what to do each day, and the total.
+        Pick a vibe. We&rsquo;ll ask four quick questions &mdash; or skip them and we&rsquo;ll
+        guess &mdash; then hand you one costed trip: where to go, where to stay, what to do
+        each day, and the total.
       </p>
 
       <div className="vibe-grid">

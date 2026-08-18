@@ -100,11 +100,15 @@ describe('R16 — the honesty audit', () => {
     await user.click(screen.getByRole('button', { name: 'Plan my trip now' }))
     await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
 
-    // S5 — the plan, with the disclosure open so its contents are swept too
-    await user.click(screen.getByText('Why this trip'))
+    // S5 — the plan. "Why this trip" is open on first render now (R19), so its
+    // contents are swept without a click.
+    expect(screen.getByText('Why this trip')).toHaveAttribute('aria-expanded', 'true')
     auditNames('S5')
     auditProvenance('S5')
 
+    // S6 is the clipboard fallback now (R17 amended): it opens when the clipboard
+    // refuses, which is what jsdom does with no stub installed.
+    Reflect.deleteProperty(navigator, 'clipboard')
     await user.click(screen.getByRole('button', { name: 'Copy as text' }))
     await screen.findByLabelText('Your trip as plain text')
 

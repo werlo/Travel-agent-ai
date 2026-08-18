@@ -1,5 +1,6 @@
-import { nightsBetween, nightsLabel, travellersLabel } from '../domain/dates'
+import { nightsBetween, nightsLabel } from '../domain/dates'
 import { formatRupees } from '../domain/money'
+import { travellersFact } from '../domain/party'
 import { QUESTION_GRAPH } from '../domain/questions/graph'
 import {
   defaultWalk,
@@ -58,14 +59,15 @@ export function questionView(
 
 /**
  * R2 — the summary bar, exactly four facts:
- * `5 nights · 2 travellers · from Bengaluru · ₹60,000`.
+ * `5 nights · 2 travellers · from Bengaluru · ₹60,000`, and
+ * `4 travellers (2 adults, 2 children)` once there are children in the party (R24).
  */
 export function summaryFacts(state: SessionState): string[] | null {
   const { basics } = state
   if (basics === null) return null
   return [
     nightsLabel(nightsBetween(basics.startDate, basics.endDate)),
-    travellersLabel(basics.travellers),
+    travellersFact(basics.adults, basics.children.length),
     `from ${basics.origin}`,
     formatRupees(basics.budget),
   ]
@@ -88,7 +90,12 @@ export function plannerRequest(
   if (state.vibe === null || state.basics === null) return null
   const walk = defaultWalk(graph, state.vibe, state.answers)
   return {
-    input: { vibe: state.vibe, basics: state.basics, answers: walk.pairs },
+    input: {
+      vibe: state.vibe,
+      basics: state.basics,
+      answers: walk.pairs,
+      excludeDestinationIds: state.excluded,
+    },
     defaultedQuestions: walk.defaulted,
   }
 }

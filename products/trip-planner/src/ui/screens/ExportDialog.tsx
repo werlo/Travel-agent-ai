@@ -18,6 +18,13 @@ import { Icon } from '../components/Icon'
 export const COPY_FAILED_MESSAGE =
   "We couldn't copy automatically. The text is selected — press Ctrl+C (or Cmd+C) to copy it."
 
+/**
+ * R17 (amended) — why this dialog opened at all. `Copy as text` now writes to the
+ * clipboard in the same click; this dialog is the fallback, and it says so.
+ */
+export const CLIPBOARD_FAILED_MESSAGE =
+  "Couldn't reach the clipboard — copy it from here"
+
 /** How long `Copy` reads `Copied` before reverting (docs/03-design.md §4 S6). */
 export const COPIED_MS = 2000
 
@@ -26,11 +33,13 @@ type CopyState = 'idle' | 'copied' | 'failed'
 export interface ExportDialogProps {
   /** The plan as plain text — built by `domain/export.toPlainText`. */
   text: string
+  /** Set when the dialog opened because the clipboard refused us (R17). */
+  failureMessage?: string | null
   onClose: () => void
 }
 
 /** Mounted means open: S5 renders it only while the dialog is showing. */
-export function ExportDialog({ text, onClose }: ExportDialogProps) {
+export function ExportDialog({ text, failureMessage = null, onClose }: ExportDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [state, setState] = useState<CopyState>('idle')
@@ -111,6 +120,11 @@ export function ExportDialog({ text, onClose }: ExportDialogProps) {
         <p className="dialog__sub">
           Plain text, ready to paste into WhatsApp, Slack or an email.
         </p>
+        {failureMessage !== null ? (
+          <p className="dialog__failure" role="alert" data-failure="clipboard">
+            {failureMessage}
+          </p>
+        ) : null}
 
         <label className="visually-hidden" htmlFor="export-text">
           Your trip as plain text

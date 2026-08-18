@@ -41,7 +41,7 @@ async function planFor(
   if (trip.startDate !== undefined) fill('Start date', trip.startDate)
   if (trip.endDate !== undefined) fill('End date', trip.endDate)
   if (trip.budget !== undefined) fill('Total budget for the whole party', trip.budget)
-  if (trip.travellers !== undefined) fill('Travellers', trip.travellers)
+  if (trip.travellers !== undefined) fill('Adults', trip.travellers)
 
   await user.click(screen.getByRole('button', { name: 'Continue' }))
   await screen.findByText(/^Question 1 of \d$/)
@@ -78,13 +78,17 @@ function card(variant: string): HTMLElement {
   return element as HTMLElement
 }
 
-describe('Why this trip (R10)', () => {
-  it('is collapsed, then lists three answer-quoting reasons and a numbered rejection', async () => {
+describe('Why this trip (R10, R19)', () => {
+  it('is open on first render and lists three answer-quoting reasons and a numbered rejection', async () => {
     const user = await planFor('Beach', [])
 
+    // R19 (customer fix 3) — it used to start collapsed, and all three judges
+    // proved they would never open it.
     const summary = screen.getByText('Why this trip')
-    expect(summary).toHaveAttribute('aria-expanded', 'false')
+    expect(summary).toHaveAttribute('aria-expanded', 'true')
 
+    await user.click(summary)
+    expect(summary).toHaveAttribute('aria-expanded', 'false')
     await user.click(summary)
     expect(summary).toHaveAttribute('aria-expanded', 'true')
 
@@ -155,14 +159,21 @@ describe('the alternatives (R11)', () => {
     expect(text('.plan-hero__id')).toBe(before.planId)
   })
 
-  it('renders the sentence, not an empty box, where no cheaper option qualifies', async () => {
+  /**
+   * R22 (customer fix 7) — where neither alternative exists the space carries the
+   * one control that does something, instead of two dashed boxes that do not.
+   */
+  it('replaces two empty slots with the "somewhere else" control', async () => {
     await planFor('Beach', ['Within India', 'West coast', 'Empty', 'Local stays'])
 
-    const slot = card('saver-absent')
-    expect(slot.textContent).toContain('No cheaper option in this catalogue for these dates')
-    expect((slot.textContent ?? '').trim().length).toBeGreaterThan(0)
-    expect(within(slot).queryByRole('button')).toBeNull()
     expect(document.querySelector('[data-alt="saver"]')).toBeNull()
+    expect(document.querySelector('[data-alt="saver-absent"]')).toBeNull()
+    expect(document.querySelector('[data-alt="stretch-absent"]')).toBeNull()
+
+    const slot = card('reject')
+    expect(
+      within(slot).getByRole('button', { name: 'Not this one — somewhere else' }),
+    ).toBeInTheDocument()
   })
 })
 

@@ -2,9 +2,12 @@ import { useState } from 'react'
 import type { Why } from '../../domain/types'
 
 /**
- * R10 — "Why this trip" (docs/03-design.md §4 S5).
+ * R10 — "Why this trip" (docs/03-design.md §4 S5), R19 (customer fix 3).
  *
- * Collapsed on first render, because P1 will not open it and P2 will. The two
+ * **Open on first render.** It was collapsed, on the theory that P1 would not open
+ * it — and all three judges proved that true, including the two who said it was the
+ * most persuasive thing in the product once they finally found it. An accordion is
+ * where honesty goes to be ignored, so it starts expanded. The two
  * sub-lists come straight from the engine: at least three reasons quoting the
  * user's own answers, and at least one named rejected destination whose line
  * carries a number. Nothing is generated here — if the section were empty it would
@@ -15,7 +18,7 @@ import type { Why } from '../../domain/types'
  * answer in every engine.
  */
 export function WhyThisTrip({ why }: { why: Why }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
 
   return (
     <details

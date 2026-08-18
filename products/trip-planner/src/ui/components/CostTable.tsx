@@ -1,5 +1,5 @@
-import { travellersLabel } from '../../domain/dates'
 import { formatRupees } from '../../domain/money'
+import { totalLabel } from '../../domain/pricing'
 import type { CostBreakdown } from '../../domain/types'
 
 /**
@@ -12,10 +12,13 @@ import type { CostBreakdown } from '../../domain/types'
  */
 export function CostTable({
   cost,
-  travellers,
+  adults,
+  childCount,
 }: {
   cost: CostBreakdown
-  travellers: number
+  adults: number
+  /** How many children are in the party (R24). `children` is React's, not ours. */
+  childCount: number
 }) {
   const rows = [
     { key: 'travel', label: 'Travel', amount: cost.travel, basis: cost.basis.travel },
@@ -31,6 +34,13 @@ export function CostTable({
       label: 'Local allowance',
       amount: cost.localAllowance,
       basis: cost.basis.localAllowance,
+    },
+    // R23 — the seasonal loading is a line of its own, inside the sum that ties.
+    {
+      key: 'seasonal',
+      label: 'Season',
+      amount: cost.seasonal,
+      basis: cost.basis.seasonal,
     },
   ]
 
@@ -53,7 +63,7 @@ export function CostTable({
         ))}
         <tr className="costtable__total">
           <th scope="row" className="costtable__item">
-            <span className="costtable__label">Total for {travellersLabel(travellers)}</span>
+            <span className="costtable__label">{totalLabel(adults, childCount)}</span>
           </th>
           <td className="costtable__amount" data-cost="total">
             {formatRupees(cost.partyTotal)}

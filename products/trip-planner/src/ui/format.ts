@@ -3,9 +3,11 @@ import {
   formatDuration,
   nightsBetween,
   nightsLabel,
-  travellersLabel,
+  parseDMY,
+  weekdayPlural,
 } from '../domain/dates'
 import { formatRupees } from '../domain/money'
+import { travellersFact } from '../domain/party'
 import type { Experience, Plan, TravelLeg } from '../domain/types'
 import type { RawBasics } from '../domain/validate'
 
@@ -41,16 +43,28 @@ export function experienceDetail(experience: Experience): string {
       ? 'Free'
       : `${formatRupees(experience.pricePerPerson)} per person`
   const hours = experience.durationHours
-  return `${price} · ${hours} ${hours === 1 ? 'hr' : 'hrs'}`
+  const parts = [price, `${hours} ${hours === 1 ? 'hr' : 'hrs'}`]
+  // R18 — the day it runs is structured data, so it can be stated next to the
+  // item and enforced by the scheduler rather than asserted in the blurb.
+  const availability = experienceAvailability(experience)
+  if (availability !== null) parts.push(availability)
+  return parts.join(' · ')
 }
 
-/** `5 nights · Sat 10 – Thu 15 Oct 2026 · 2 travellers · from Bengaluru`. */
+/** 'Wednesdays only' — null when the experience runs any day (R18). */
+export function experienceAvailability(experience: Experience): string | null {
+  if (experience.fixedWeekday === null) return null
+  return `${weekdayPlural(experience.fixedWeekday)} only`
+}
+
+/** `5 nights · Sat 10 – Thu 15 Oct 2026 · 2 travellers · from Bengaluru · based in Fort Kochi`. */
 export function planFacts(plan: Plan): string {
   return [
     nightsLabel(plan.nights),
     formatDateRange(plan.startDate, plan.endDate),
-    travellersLabel(plan.travellers),
+    travellersFact(plan.adults, plan.children),
     `from ${plan.origin}`,
+    `based in ${plan.baseName}`,
   ].join(' · ')
 }
 
@@ -69,13 +83,16 @@ export function defaultedLabel(count: number): string {
  * an error, because the bar is a running total and not a validator.
  */
 export function draftSummaryFacts(raw: RawBasics): string[] {
-  const nights = nightsBetween(raw.startDate.trim(), raw.endDate.trim())
-  const travellers = Number(raw.travellers.trim())
+  const start = parseDMY(raw.startDate)
+  const end = parseDMY(raw.endDate)
+  const nights = start === null || end === null ? Number.NaN : nightsBetween(start, end)
+  const adults = Number(raw.travellers.trim())
+  const children = (raw.childAges ?? []).filter((age) => age.trim() !== '').length
   const budget = Number(raw.budget.trim().replace(/,/g, ''))
   return [
     Number.isFinite(nights) && nights > 0 ? nightsLabel(nights) : 'Dates to confirm',
-    Number.isFinite(travellers) && travellers > 0
-      ? travellersLabel(travellers)
+    Number.isFinite(adults) && adults > 0
+      ? travellersFact(adults, children)
       : 'Travellers to confirm',
     `from ${raw.origin}`,
     Number.isFinite(budget) && budget > 0 ? formatRupees(budget) : 'Budget to confirm',

@@ -1,3 +1,4 @@
+import { changeNotice } from '../domain/changes'
 import { travellersLabel } from '../domain/dates'
 import { formatRupees } from '../domain/money'
 import { derivePath, isComplete, nodeFor, optionFor } from '../domain/questions/path'
@@ -42,6 +43,15 @@ export interface SessionState {
   restoreRequested: boolean
   /** True for one render after an edit sent the user down a different branch (R6). */
   branchChanged: boolean
+  /** R22 — destination ids the user has turned down, in the order they did. */
+  excluded: readonly string[]
+  /** R22 — the catalogue ran out of destinations that fit. */
+  rejectExhausted: boolean
+  /**
+   * R19 — what a re-plan silently changed, in one sentence, rendered next to the
+   * total. Null when nothing worth saying changed.
+   */
+  changeNotice: string | null
   /** Field name -> message, basics only (R3). */
   errors: Record<string, string>
   persistenceAvailable: boolean
@@ -59,6 +69,10 @@ export type SessionAction =
   | { type: 'skipToPlan' }
   | { type: 'answerDefaulted' }
   | { type: 'selectVariant'; variant: PlanVariant }
+  /** R22 — 'Not this one — somewhere else', keeping the whole trip. */
+  | { type: 'rejectDestination'; destinationId: string; planSet: PlanSet }
+  | { type: 'rejectExhausted' }
+  | { type: 'undoReject'; destinationId: string; planSet: PlanSet }
   /**
    * R12 — new basics plus the plan they produce, in one action. The engine is run
    * by the caller (`SessionProvider.replan`) precisely so that the swap is atomic:
@@ -85,6 +99,9 @@ export const initialState: SessionState = {
   planSet: null,
   restoreRequested: false,
   branchChanged: false,
+  excluded: [],
+  rejectExhausted: false,
+  changeNotice: null,
   errors: {},
   persistenceAvailable: true,
   announcement: '',
@@ -108,6 +125,9 @@ export function sessionReducer(
         planSet: null,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        excluded: [],
+        rejectExhausted: false,
+        changeNotice: null,
       }
     }
 
@@ -195,6 +215,13 @@ export function sessionReducer(
         questionCursor: null,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        // R19 — on a first render there is nothing to compare against, but an
+        // answer the ladder had to drop is still a change the user did not make.
+        changeNotice: changeNotice({
+          previous: null,
+          next: action.planSet.recommended,
+          planSet: action.planSet,
+        }),
       }
 
     // R11 — switching alternative rewires the whole screen, because every region of
@@ -219,15 +246,60 @@ export function sessionReducer(
     case 'adjust': {
       if (state.phase !== 'plan') return state
       const next = action.planSet.recommended
+      const shown = state.planSet?.[state.selectedVariant] ?? state.planSet?.recommended ?? null
       return {
         ...state,
         basics: action.basics,
         planSet: action.planSet,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        rejectExhausted: false,
+        changeNotice: changeNotice({ previous: shown, next, planSet: action.planSet }),
         announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
           next.cost.partyTotal,
         )} total for ${travellersLabel(action.basics.travellers)}.`,
+      }
+    }
+
+    // R22 — the trip survives the rejection: dates, budget, travellers, origin and
+    // every answer are carried straight through, and only the search narrows.
+    case 'rejectDestination': {
+      if (state.phase !== 'plan') return state
+      const shown = state.planSet?.[state.selectedVariant] ?? state.planSet?.recommended ?? null
+      const next = action.planSet.recommended
+      return {
+        ...state,
+        planSet: action.planSet,
+        excluded: state.excluded.includes(action.destinationId)
+          ? state.excluded
+          : [...state.excluded, action.destinationId],
+        rejectExhausted: false,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+        changeNotice: changeNotice({ previous: shown, next, planSet: action.planSet }),
+        announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
+          next.cost.partyTotal,
+        )} total for ${travellersLabel(next.travellers)}.`,
+      }
+    }
+
+    case 'rejectExhausted':
+      return { ...state, rejectExhausted: true }
+
+    case 'undoReject': {
+      if (state.phase !== 'plan') return state
+      const next = action.planSet.recommended
+      return {
+        ...state,
+        planSet: action.planSet,
+        excluded: state.excluded.filter((id) => id !== action.destinationId),
+        rejectExhausted: false,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+        changeNotice: null,
+        announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
+          next.cost.partyTotal,
+        )} total for ${travellersLabel(next.travellers)}.`,
       }
     }
 
@@ -264,6 +336,9 @@ export function sessionReducer(
             ? 'recommended'
             : session.selectedVariant,
         planSet: session.planSet,
+        excluded: session.excluded,
+        rejectExhausted: false,
+        changeNotice: null,
         restoreRequested: false,
         errors: {},
       }

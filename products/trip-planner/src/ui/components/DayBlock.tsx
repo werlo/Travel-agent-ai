@@ -41,6 +41,12 @@ export function DayBlockCard({ day }: { day: DayBlockData }) {
             <span className="dayblock__blurb">{experience.blurb}</span>
           </li>
         ))}
+        {day.note !== null ? (
+          <li className="dayblock__item dayblock__item--free">
+            <Icon name="star" size={16} className="dayblock__glyph" />
+            <span className="dayblock__label">{day.note}</span>
+          </li>
+        ) : null}
         {inbound.map((leg) => (
           <li key={`${leg.kind}-${leg.date}`} className="dayblock__item">
             <Icon name="plane" size={16} className="dayblock__glyph" />

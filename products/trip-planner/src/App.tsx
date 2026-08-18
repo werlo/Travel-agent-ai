@@ -23,7 +23,7 @@ import { PlanScreen } from './ui/screens/PlanScreen'
  */
 
 function AppShell() {
-  const { state, dispatch, today, restored, replan } = useSession()
+  const { state, dispatch, today, restored, replan, replanExcluding } = useSession()
   const { phase } = state
 
   const [draftFacts, setDraftFacts] = useState<string[] | null>(null)
@@ -142,6 +142,21 @@ function AppShell() {
             selectedVariant={state.selectedVariant}
             restoreRequested={state.restoreRequested}
             restored={restored}
+            changeNotice={state.changeNotice}
+            rejectExhausted={state.rejectExhausted}
+            onReject={(destinationId) => {
+              // R22 — one click, the whole trip kept, and an honest sentence when
+              // the catalogue has nothing left to offer.
+              const excluded = [...state.excluded, destinationId]
+              const planSet = replanExcluding(excluded)
+              if (planSet === null) dispatch({ type: 'rejectExhausted' })
+              else dispatch({ type: 'rejectDestination', destinationId, planSet })
+            }}
+            onUndoReject={(destinationId) => {
+              const excluded = state.excluded.filter((id) => id !== destinationId)
+              const planSet = replanExcluding(excluded)
+              if (planSet !== null) dispatch({ type: 'undoReject', destinationId, planSet })
+            }}
             onAnswerDefaulted={() => dispatch({ type: 'answerDefaulted' })}
             onSelectVariant={(variant) => dispatch({ type: 'selectVariant', variant })}
             onAdjust={(basics) => {
