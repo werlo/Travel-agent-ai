@@ -6,10 +6,13 @@
   "createdAt": "2026-08-18T09:18:00Z",
   "stage": "shipped",
   "verdict": "READY_WITH_CAVEATS",
-  "rounds": { "fix": 0, "refine": 2 },
+  "rounds": {
+    "fix": 0,
+    "refine": 2
+  },
   "gates": {
-    "qa": "PASS — 511/511 unit, 226/226 e2e, zero open S1/S2 (one caveat: a stale-banner bug the Tech Lead found independently, not caught by the E2E suite)",
-    "panel": "FAIL — mean ~7/10 against a gate of 8.0, 2 blockers from the trust-sensitive judge",
+    "qa": "PASS \u2014 511/511 unit, 226/226 e2e, zero open S1/S2 (one caveat: a stale-banner bug the Tech Lead found independently, not caught by the E2E suite)",
+    "panel": "FAIL \u2014 mean ~7/10 against a gate of 8.0, 2 blockers from the trust-sensitive judge",
     "architecture": "GO_WITH_RISK"
   },
   "history": [
@@ -23,7 +26,7 @@
     {
       "run": 2,
       "completed": "2026-08-18T16:11:00Z",
-      "verdict": "FAILED — infra",
+      "verdict": "FAILED \u2014 infra",
       "note": "Launched by name instead of scriptPath; executed a stale pre-refineOnly copy of the workflow, dispatched a PM/Designer rewrite against the existing PRD and design spec, then died on an unrelated tech-lead API error. Both overwritten docs recovered clean from git. Root-caused: named-workflow lookups resolve at session start and silently ignore later edits. Skills now launch by scriptPath; PM/Designer agents now guarded to revise in place rather than regenerate."
     },
     {
@@ -37,6 +40,13 @@
       "verdict": "READY_WITH_CAVEATS",
       "agents": 15,
       "note": "refineOnly run, 4 fix slices (F1-F4) against the founder's priority-ordered feedback. QA now PASS (511/511 unit, 226/226 e2e). Panel moved to ~7/10 (gate 8.0) with 2 remaining blockers on the reroll path. Tech Lead GO_WITH_RISK, found one real bug independently (stale change-notice banner after restore) that an earlier QA round wrongly marked fixed."
+    },
+    {
+      "run": "live-price-layer",
+      "completed": "2026-08-18T22:09:00Z",
+      "kind": "direct developer+qa dispatch, not full pipeline",
+      "note": "Additive live-price-check overlay (Travelpayouts flights, Booking.com hotels) behind the existing TravelDataSource seam. No API keys yet -- app is byte-identical to before with none configured. Travelpayouts built against a verified real contract; Booking.com auth wired for real but response schema explicitly unverified pending partner docs. Found and flagged (not silently fixed): the shipped CSP (connect-src none) will block these calls even once keys exist -- needs a coordinated CSP + E2E-assertion update at first-real-key time. QA shallow pass PASS, zero S1/S2, 530/530 unit, 227/227 e2e.",
+      "blockedOn": "founder to provide VITE_TRAVELPAYOUTS_TOKEN, VITE_TRAVELPAYOUTS_MARKER, VITE_BOOKING_API_KEY, VITE_BOOKING_AFFILIATE_ID"
     }
   ]
 }
