@@ -542,6 +542,33 @@ h1:focus:not(:focus-visible) {
   align-items: center;
 }
 
+/* R26 — "Anywhere except…" on Trip basics. */
+.field--exclude .field__inline {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.field--exclude .field__inline .field__control {
+  flex: 1;
+}
+
+.field--exclude .excluded__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  list-style: none;
+}
+
+.field--exclude .excluded__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
 .field__prefix {
   position: absolute;
   left: var(--space-3);
@@ -1129,6 +1156,13 @@ h1:focus:not(:focus-visible) {
 @media (max-width: 599px) {
   .form__row {
     grid-template-columns: 1fr;
+  }
+
+  /* R26 — the input + "Exclude" button row overflows a 360px viewport side by
+     side; stack it, the same way the two-up form rows above already do. */
+  .field--exclude .field__inline {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .card {

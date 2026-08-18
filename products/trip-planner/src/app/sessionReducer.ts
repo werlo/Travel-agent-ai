@@ -82,6 +82,13 @@ export type SessionAction =
   | { type: 'rejectExhausted' }
   | { type: 'undoReject'; destinationId: string; planSet: PlanSet }
   /**
+   * R26 — 'Anywhere except…' on Trip basics (S2), before any plan exists. Writes
+   * to the same `excluded` set as R22's post-plan reject; there is no plan to
+   * swap yet, so unlike `rejectDestination` this never carries a `PlanSet`.
+   */
+  | { type: 'excludeDestination'; destinationId: string }
+  | { type: 'undoExcludeDestination'; destinationId: string }
+  /**
    * R12 — new basics plus the plan they produce, in one action. The engine is run
    * by the caller (`SessionProvider.replan`) precisely so that the swap is atomic:
    * a reducer that cleared `planSet` and left the recompute to an effect would put
@@ -316,6 +323,23 @@ export function sessionReducer(
 
     case 'rejectExhausted':
       return { ...state, rejectExhausted: true }
+
+    // R26 — pre-plan exclusion. Dedup on add; the same `excluded` array R22 reads
+    // and writes, so a name excluded here is a destination R22's reroll and the
+    // engine's search never see.
+    case 'excludeDestination':
+      return {
+        ...state,
+        excluded: state.excluded.includes(action.destinationId)
+          ? state.excluded
+          : [...state.excluded, action.destinationId],
+      }
+
+    case 'undoExcludeDestination':
+      return {
+        ...state,
+        excluded: state.excluded.filter((id) => id !== action.destinationId),
+      }
 
     case 'undoReject': {
       if (state.phase !== 'plan') return state

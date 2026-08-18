@@ -53,6 +53,15 @@ function AppShell() {
   const resumable =
     phase === 'vibe' && state.vibe !== null && state.basics !== null ? state.basics : null
 
+  // R26 — the full catalogue, for the "Anywhere except…" matcher, plus the
+  // currently-excluded ids resolved back to names for the per-entry undo list.
+  // This is the same `state.excluded` R22's post-plan reject reads and writes.
+  const destinationOptions = CATALOGUE.destinations.map((d) => ({ id: d.id, name: d.name }))
+  const excludedDestinations = state.excluded.flatMap((id) => {
+    const destination = CATALOGUE.destinations.find((d) => d.id === id)
+    return destination === undefined ? [] : [{ id: destination.id, name: destination.name }]
+  })
+
   return (
     // `app--plan` is what lets the 360 layout lift S5's primary action into a
     // fixed bottom bar without leaving it on top of the provenance footer
@@ -111,6 +120,12 @@ function AppShell() {
             onDraftChange={setDraftFacts}
             onBack={() => dispatch({ type: 'backToVibe' })}
             onSubmit={(basics) => dispatch({ type: 'submitBasics', basics })}
+            destinationOptions={destinationOptions}
+            excludedDestinations={excludedDestinations}
+            onExclude={(destinationId) => dispatch({ type: 'excludeDestination', destinationId })}
+            onUndoExclude={(destinationId) =>
+              dispatch({ type: 'undoExcludeDestination', destinationId })
+            }
           />
         ) : null}
 

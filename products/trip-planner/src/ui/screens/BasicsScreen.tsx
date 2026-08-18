@@ -8,6 +8,7 @@ import {
   nightsLabel,
   parseDMY,
 } from '../../domain/dates'
+import { matchDestinationsByName, type NamedDestination } from '../../domain/exclusions'
 import { CHILD_AGE_HINT, CHILD_INPUT_MAX_AGE, CHILD_INPUT_MIN_AGE } from '../../domain/party'
 import { ORIGIN_CITIES, type Basics, type ISODate } from '../../domain/types'
 import {
@@ -80,6 +81,12 @@ export interface BasicsScreenProps {
   onSubmit: (basics: Basics) => void
   onBack: () => void
   onDraftChange: (facts: string[]) => void
+  /** R26 — the full catalogue, for matching what the user types against a name. */
+  destinationOptions: readonly NamedDestination[]
+  /** R26 — the same `excluded` set R22's post-plan reject reads and writes. */
+  excludedDestinations: readonly NamedDestination[]
+  onExclude: (destinationId: string) => void
+  onUndoExclude: (destinationId: string) => void
 }
 
 export function BasicsScreen({
@@ -88,9 +95,15 @@ export function BasicsScreen({
   onSubmit,
   onBack,
   onDraftChange,
+  destinationOptions,
+  excludedDestinations,
+  onExclude,
+  onUndoExclude,
 }: BasicsScreenProps) {
   const [raw, setRaw] = useState<RawBasics>(() => defaultRawBasics(today, saved))
   const [errors, setErrors] = useState<BasicsErrors>({})
+  const [excludeQuery, setExcludeQuery] = useState('')
+  const [excludeError, setExcludeError] = useState<string | null>(null)
   // The summary is a snapshot taken on submit, cleared field by field as the user
   // fixes things. It deliberately does NOT track blur: it sits above the <h1>, so
   // adding it mid-click would move the whole form out from under the pointer.
@@ -163,6 +176,32 @@ export function BasicsScreen({
       ages[index] = value
       return { ...current, childAges: ages }
     })
+  }
+
+  // R26 — match what was typed against the catalogue and add every unexcluded
+  // match to the same `excluded` set R22's post-plan reject writes to. Loose,
+  // case-insensitive substring matching: "Goa" has to reach "North Goa".
+  const addExclusion = (): void => {
+    const query = excludeQuery.trim()
+    if (query === '') return
+    const matches = matchDestinationsByName(destinationOptions, query)
+    if (matches.length === 0) {
+      setExcludeError(`We don't recognise "${query}" as a destination in the catalogue.`)
+      return
+    }
+    const alreadyExcludedIds = new Set(excludedDestinations.map((d) => d.id))
+    const newMatches = matches.filter((match) => !alreadyExcludedIds.has(match.id))
+    if (newMatches.length === 0) {
+      setExcludeError(`${matches[0]?.name} is already on your "Anywhere except" list.`)
+      return
+    }
+    if (alreadyExcludedIds.size + newMatches.length >= destinationOptions.length) {
+      setExcludeError(`You can't exclude every destination in the catalogue.`)
+      return
+    }
+    newMatches.forEach((match) => onExclude(match.id))
+    setExcludeQuery('')
+    setExcludeError(null)
   }
 
   const blurField = (field: BasicsField): void => {
@@ -442,6 +481,71 @@ export function BasicsScreen({
               />
             ) : null}
           </FieldMessage>
+        </div>
+
+        {/* R26 — exclude a destination before any plan is generated. Writes to the
+            same excluded set R22's post-plan "Not this one — somewhere else" uses,
+            so excluding Goa here has the identical effect to rejecting it later. */}
+        <div className="field field--exclude">
+          <label className="field__label" htmlFor="field-exclude">
+            Anywhere except&hellip;
+          </label>
+          <div className="field__inline">
+            <input
+              id="field-exclude"
+              className="field__control"
+              type="text"
+              autoComplete="off"
+              list="exclude-destination-options"
+              placeholder="e.g. Goa"
+              value={excludeQuery}
+              aria-invalid={excludeError !== null}
+              aria-describedby={describedBy('exclude', true, excludeError !== null)}
+              onChange={(e) => {
+                setExcludeQuery(e.target.value)
+                if (excludeError !== null) setExcludeError(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addExclusion()
+                }
+              }}
+            />
+            <datalist id="exclude-destination-options">
+              {destinationOptions.map((destination) => (
+                <option key={destination.id} value={destination.name} />
+              ))}
+            </datalist>
+            <button type="button" className="btn btn--ghost" onClick={addExclusion}>
+              Exclude
+            </button>
+          </div>
+          <p id={hintId('exclude')} className="field__hint">
+            Rule out somewhere you&rsquo;ve already done &mdash; we&rsquo;ll never recommend it,
+            as a Saver, a Stretch or a reroll, this session.
+          </p>
+          <FieldMessage>
+            {excludeError !== null ? (
+              <FieldError field="exclude" message={excludeError} alert />
+            ) : null}
+          </FieldMessage>
+          {excludedDestinations.length > 0 ? (
+            <ul className="excluded__list">
+              {excludedDestinations.map((destination) => (
+                <li key={destination.id} className="excluded__item">
+                  <span className="excluded__name">{destination.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => onUndoExclude(destination.id)}
+                  >
+                    {`Undo — allow ${destination.name}`}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         <div className="form__actions">
