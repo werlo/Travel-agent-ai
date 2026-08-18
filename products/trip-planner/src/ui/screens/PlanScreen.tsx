@@ -17,6 +17,7 @@ import { Alternatives } from '../components/Alternatives'
 import { CostTable } from '../components/CostTable'
 import { DayBlockCard } from '../components/DayBlock'
 import { Icon } from '../components/Icon'
+import { LivePriceCheck } from '../components/LivePriceCheck'
 import { RelaxBanner } from '../components/RelaxBanner'
 import { WhyThisTrip } from '../components/WhyThisTrip'
 import { CLIPBOARD_FAILED_MESSAGE, ExportDialog } from './ExportDialog'
@@ -269,6 +270,8 @@ export function PlanScreen({
               {plan.stay.rooms === 1 ? 'room' : 'rooms'}.
             </p>
           </section>
+
+          <LivePriceCheck plan={plan} />
 
           <Alternatives
             planSet={planSet}

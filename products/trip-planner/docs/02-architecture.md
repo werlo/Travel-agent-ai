@@ -702,9 +702,9 @@ than pretending a threat model exists that does not.
 | Injection | No SQL, no shell, no server, no query construction of any kind. Catalogue lookups are object property reads on a frozen literal. |
 | Untrusted input into the engine | `localStorage` is attacker-controllable by anyone with devtools. It is therefore **parsed, not trusted**: `sessionStore.read()` validates `schema`, narrows every field, and returns `null` on anything unexpected rather than spreading a blob into state. A hostile session ends at the vibe screen, not in the reducer. |
 | Prototype pollution | The stored session is validated field-by-field into a fresh object; `__proto__` never survives, because we never `Object.assign` a parsed blob into state. |
-| Secrets | **There are none, and there is nowhere to put one.** No API keys, no tokens, no `.env`. If a future reviewer finds an env var in this product, something has gone badly wrong. |
+| Secrets | **There were none through slice 4.** §13 (post-ship) adds four optional `VITE_*` env vars for a live-price overlay, all unset in the deployed default — with none set, this row is unchanged: no key, no network call, nothing to leak. If a key is ever added, remember it ships inside the client bundle (§13 explains why that is unavoidable for the Travelpayouts signature specifically) — it is not a server-side secret and should not be treated like one. |
 | Dependency risk | Runtime dependencies: `react`, `react-dom`. Nothing else ships to the browser. Everything else (vite, vitest, playwright, eslint, typescript) is a devDependency and never reaches a user. A two-package runtime surface is the strongest supply-chain position available and it is worth defending in review. |
-| Content Security Policy | A meta CSP of `default-src 'self'; connect-src 'none'; img-src 'self' data:` is achievable because we genuinely need nothing external. Slice 4. |
+| Content Security Policy | A meta CSP of `default-src 'self'; connect-src 'none'; img-src 'self' data:` is achievable because we genuinely need nothing external. Slice 4. Still exactly this string post-ship (§13): the live-price overlay adds no exception, so it stays unreachable even after keys are configured until this policy is deliberately widened. |
 | Consumer protection | R16 is a safety requirement, not a UX one. The provenance line is non-dismissable, and catalogue invariant C5 plus an E2E accessible-name audit make "Book/Pay/Checkout/Reserve" a test failure. |
 
 ---
@@ -836,3 +836,103 @@ runnable and demonstrable.
 | F4 | `formatRupees` prefixed a bare ASCII `-` before the `₹` symbol for negative amounts (`₹-9,640`), unlike the season basis line's own `−20%` (B9). | The sign (U+2212 MINUS SIGN) now sits **outside** the symbol: `−₹9,640`. | Matches the existing seasonal-basis convention (`season.ts`'s `−20%`/`+35%`) instead of contradicting it one column to the right. |
 | F4 | R20's acceptance criterion enumerates a tax qualifier for stay / travel / experiences / local allowance, and the seasonal loading line carried none of its own (B10). | `basis.seasonal` now ends `, no separate tax — it loads rates that already include GST`. | The round-1 footnote (`Every rate here includes GST … nothing is added later`) covered the gap in prose; QA filed it S4 rather than S3 for that reason, but the line-level qualifier is cheap and removes the one priced row that read differently from its four neighbours. |
 | F4 (found while verifying, not touched) | `e2e/qa-04-alternatives-adjust.spec.ts` (R11/UX15/UX16, 3 tests) and `e2e/qa-05-trust-session.spec.ts` (R14/UX18, 2 tests; R17, 1 test) fail on a fresh checkout **before** any F4 change — reproduced by stashing this round's diff, restarting the dev server and re-running the same specs. | Left unfixed. | These regressions are outside F4's assigned scope (`touches: R3, R4, R8, R16, R17, R20, R23`) and appear to trace to F2's vibe-affinity floor (D1) narrowing the candidate pool for `Mountains` enough that no Saver/Stretch pair (R11) survives, plus a relaxation-banner wording change from the same round that no longer names the dropped constraint by its original label (R14). Fixing them means re-touching the planner and constraint copy F2 already shipped, which is a Tech Lead call, not a scope call an F-round developer should make unilaterally. Recorded here rather than silently left off the `04-qa-report.md` scoreboard. |
+| Live price check (post-ship) | §8: "Secrets: there are none, and there is nowhere to put one … if a future reviewer finds an env var in this product, something has gone badly wrong." | Four optional `VITE_*` env vars now exist (`.env.example`), all unset in the deployed default. See §13. | The founder asked for a real, wired (not stubbed) live-price overlay ahead of having the keys to test it against. §8's blanket claim is now false as literally written; §13 is the honest replacement for that paragraph, not a silent contradiction of it. |
+| Live price check (post-ship) | Task brief: "check `e2e/control-export.spec.ts` (network + CSP assertions) still passes." | It does, unmodified — but the shipped CSP (`connect-src 'none'`) means the live layer **cannot reach either API even once real keys are added**, until the CSP is deliberately loosened and that same E2E test's `not.toMatch(/https?:\/\/(?!localhost\|127\.0\.0\.1)/)` assertion is updated alongside it. | Widening `connect-src` to the two live-price hosts today would fail that exact assertion, and the task explicitly scoped "no keys yet" as the state to ship. Loosening the CSP is a deliberate, coordinated change (CSP + the E2E assertion + a real-key smoke test) for whoever adds the first real key, not something to sneak in unannounced. Recorded here so it is not a surprise later. |
+
+---
+
+## 13. Live price check (post-ship addition)
+
+An additive, non-blocking overlay on S5 (the plan screen): a real, freshly-fetched
+flight price and hotel price shown *alongside* the deterministic catalogue estimate,
+never replacing it and never feeding back into the engine. Built ahead of having real
+API keys, at the founder's request — the "no keys yet" state below is what ships
+today.
+
+**The invariant that makes this safe to build without touching the reviewed core:**
+nothing in `src/data/livePrices/` is imported by `src/domain/**`, `generatePlanSet`,
+or anything that produces or reads a `CatalogueSnapshot` or a plan ID. The overlay is
+a second, parallel data seam next to `TravelDataSource` (§4.1), not a change to it.
+With no keys configured — verified, not asserted — the plan screen is byte-for-byte
+identical to before this addition: no new DOM, no new network call, no new console
+output.
+
+### Files
+
+```
+src/data/livePrices/
+├── types.ts                 # LivePriceQuery, LiveFlightQuote, LiveHotelQuote,
+│                             #   LivePriceProvider (getFlightQuote/getHotelQuote,
+│                             #   MUST NEVER throw — every failure resolves null)
+├── signature.ts              # Travelpayouts' md5("token:marker:"+values) signature
+├── travelpayoutsProvider.ts  # real implementation against the verified contract
+├── bookingProvider.ts        # real auth wiring; schema UNVERIFIED (see below)
+├── airports.ts                # hand-authored OriginCity/destination-id -> IATA map
+├── query.ts                   # Plan fields -> LivePriceQuery, never touches the engine
+└── index.ts                   # resolveLivePriceProviders(): the one UI entry point
+src/ui/components/LivePriceCheck.tsx  # the section itself, mounted from PlanScreen
+.env.example                          # the four VITE_* vars, all optional
+```
+
+### The no-keys default
+
+`resolveLivePriceProviders()` reads four `VITE_*` env vars (`VITE_TRAVELPAYOUTS_TOKEN`,
+`VITE_TRAVELPAYOUTS_MARKER`, `VITE_BOOKING_API_KEY`, `VITE_BOOKING_AFFILIATE_ID`).
+With none set — today's deployed state — it returns `{ flights: null, hotels: null }`
+before any network call, and `<LivePriceCheck>` renders nothing: not a placeholder,
+not a spinner, no element in the DOM. `e2e/control-export.spec.ts`'s "the app talks to
+nobody" test (unmodified) and the full unit suite (unmodified, +19 new tests) both
+pass with this addition in place.
+
+### Travelpayouts (flights) — the verified half
+
+Implements the documented real-time flight search contract
+(`travelpayouts.github.io/slate`): `POST /v1/flight_search` with an MD5 signature,
+poll `GET /v1/flight_search_results?uuid=…` up to 3 times / 1.5 s apart / 6 s overall
+timeout. Two things are explicitly *not* verified against a live account (none
+exists yet):
+
+- The exact recursive key-sort algorithm for the signature. `signature.ts` implements
+  Travelpayouts' own documented description; `tests/livePrices.test.ts` locks it with
+  a golden value so a future edit cannot silently change it, but nobody has run it
+  against a real token yet.
+- The `flight_search_results` response shape. The parser (`findProposals`) walks the
+  response recursively looking for any object with a numeric `price` and a string
+  `currency`, rather than assuming a fixed path — deliberately defensive against a
+  schema that was described, not observed.
+- **The token is unavoidably client-visible.** Computing the MD5 signature in the
+  browser means the token has to be present in the browser to compute it — there is
+  no way to keep it secret in a pure static SPA without adding a backend proxy, which
+  this product does not have. Documented in `signature.ts`; not a bug to "fix" later,
+  a structural fact of doing this without a server.
+
+### Booking.com (hotels) — the unverified half
+
+Auth wiring (`Authorization: Bearer …` + `X-Affiliate-Id`) is real. **The request
+body and response schema are not verified** — developers.booking.com's Partner Hub
+docs render client-side and could not be scraped while building this, and there is
+no partner access yet to test against empirically. `bookingProvider.ts` says so at
+the top of the file and wraps every field access defensively: any unexpected shape
+resolves `null`, nothing throws. This needs a real pass once partner access exists;
+treat it as wired, not finished.
+
+### CSP — the gap this creates
+
+The shipped Content Security Policy (`default-src 'self'; connect-src 'none'; …`,
+§8) blocks **all** outbound `fetch` calls, including these — with or without keys.
+That is correct today (no keys, so no calls happen anyway) but means the live layer
+will still be unreachable the day real keys are added, until `connect-src` is
+deliberately widened to the two live-price hosts *and*
+`e2e/control-export.spec.ts`'s CSP test is updated to match — that test currently
+asserts the policy contains no non-localhost origin at all, by design. Left
+unresolved on purpose: doing it now would either break that test's stated intent
+("the app talks to nobody") while keys still don't exist, or ship a widened CSP
+nobody has tested a request through. See the Deviations table.
+
+### Airport codes
+
+The catalogue prices routes as flat return fares (§3), not flight segments, so it
+carries no IATA codes. `airports.ts` adds a small, separately-maintained lookup for
+the six origin cities and fourteen destinations (nearest serviced airport where a
+destination has none of its own, e.g. Ella → Colombo) — new data, never read by
+`generatePlanSet` or anything under `src/domain/`.

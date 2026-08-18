@@ -1133,6 +1133,32 @@ h1:focus:not(:focus-visible) {
   margin-top: var(--space-1);
 }
 
+/* --------------------------------------------------------- live price check */
+
+.plan-section--liveprice {
+  margin-top: var(--space-8);
+}
+
+.liveprice__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  list-style: none;
+}
+
+.liveprice__line {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.liveprice__link {
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+}
+
 /* -------------------------------------------------- slice 2 responsive rules */
 
 @media (max-width: 1023px) {
@@ -1377,6 +1403,17 @@ h1:focus:not(:focus-visible) {
 @media (max-width: 1023px) {
   .plan-section--adjust {
     order: 5;
+  }
+}
+
+/* ------------------------------------------- live price check responsive rule */
+
+@media (max-width: 1023px) {
+  /* Same order as `.plan-section--alts` (4): ties break by source order, and the
+     live price check sits right before it in the DOM, so it lands directly after
+     the cost breakdown and before the alternatives — never ahead of "why". */
+  .plan-section--liveprice {
+    order: 4;
   }
 }
 
