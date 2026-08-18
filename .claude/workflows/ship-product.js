@@ -28,6 +28,28 @@ const cfg = Object.assign(
 
 if (!cfg.slug) throw new Error('ship-product needs args.slug (see .claude/skills/ship)')
 
+// Reasoning effort per stage. Cheap where the work is mechanical and the spec
+// already decided everything; expensive where judgement is what determines whether
+// the product is any good. Wiring up a build config is not the same kind of work as
+// deciding what to cut from the scope, and paying the same rate for both is waste.
+// Override any single key via args.effort, e.g. { effort: { judge: 'high' } }.
+const EFFORT = Object.assign(
+  {
+    prd: 'high',          // scope decisions are the most expensive thing to get wrong
+    architecture: 'high', // as is the shape everything else is built on
+    design: 'medium',
+    scaffold: 'low',      // slice 1 is boilerplate the house stack already specifies
+    build: 'medium',
+    fix: 'medium',
+    qa: 'medium',
+    judge: 'medium',
+    triage: 'low',        // ranking a short list against stated criteria
+    review: 'high',       // the last chance to catch what everyone else missed
+    release: 'medium',
+  },
+  cfg.effort || {}
+)
+
 const DIR = cfg.dir || `products/${cfg.slug}`
 const DOCS = `${DIR}/docs`
 const URL = cfg.url || `see ${DIR}/.agency/state.json`
@@ -312,7 +334,7 @@ messy input they arrive with — those personas become the customer panel that j
 this product, so thin personas produce a useless panel.
 
 Decide every ambiguity yourself and record it under Assumptions. Do not ask the founder.`,
-  { agentType: 'product-manager', label: 'pm:prd', phase: 'Discovery', schema: S_PRD }
+  { agentType: 'product-manager', label: 'pm:prd', phase: 'Discovery', schema: S_PRD, effort: EFFORT.prd }
 )
 
 if (!prd) throw new Error('Discovery failed: no PRD produced. Nothing downstream can proceed.')
@@ -349,7 +371,7 @@ test harness, one real screen rendering) and every later slice names the require
 satisfies and leaves the app runnable.
 
 Nothing that needs an external service, API key or paid dependency.`,
-      { agentType: 'tech-lead', label: 'techlead:architecture', phase: 'Architecture & Design', schema: S_ARCH }
+      { agentType: 'tech-lead', label: 'techlead:architecture', phase: 'Architecture & Design', schema: S_ARCH, effort: EFFORT.architecture }
     )
   },
   function () {
@@ -369,7 +391,7 @@ and dark, with the WCAG contrast ratios stated. Specify every state of every scr
 including empty, loading and error, with the real copy written out. Then produce the
 numbered UX acceptance checklist (UX1..UXn) that QA will test — each check must be
 observable in the running UI by someone who never read your document.`,
-      { agentType: 'designer', label: 'designer:spec', phase: 'Architecture & Design', schema: S_DESIGN }
+      { agentType: 'designer', label: 'designer:spec', phase: 'Architecture & Design', schema: S_DESIGN, effort: EFFORT.design }
     )
   },
 ])
@@ -414,7 +436,7 @@ stubs or placeholder content on any path the PRD covers.
 
 Before returning, from ${DIR}: run \`npm run lint && npm run build && npm test\` and put
 the real result in your summary. All must pass. Then commit: feat(${cfg.slug}): ${s.id} — <one line>.`,
-    { agentType: 'developer', label: `dev:${s.id}`, phase: 'Build', schema: S_BUILD }
+    { agentType: 'developer', label: `dev:${s.id}`, phase: 'Build', schema: S_BUILD, effort: i === 0 ? EFFORT.scaffold : EFFORT.build }
   )
 
   builds.push(result)
@@ -454,7 +476,7 @@ You may create and edit files under ${DIR}/tests/ and ${DIR}/e2e/ ONLY. Never mo
 product source to make a test pass — file a bug instead.
 
 Write ${DOCS}/04-qa-report.md${round > 1 ? ' — append a new round section, do not overwrite the previous rounds' : ''} with the real command output. PASS requires zero open S1/S2. Mark anything you could not test as UNTESTED rather than passing it.`,
-    { agentType: 'qa-engineer', label: `qa:round-${round}`, phase: 'QA', schema: S_QA }
+    { agentType: 'qa-engineer', label: `qa:round-${round}`, phase: 'QA', schema: S_QA, effort: EFFORT.qa }
   )
 
   if (!qa) {
@@ -487,7 +509,7 @@ anything outside these fixes — QA's regression baseline depends on it.
 
 Before returning, from ${DIR}: \`npm run lint && npm run build && npm test\` all pass, and
 commit: fix(${cfg.slug}): QA round ${round}.`,
-    { agentType: 'developer', label: `dev:qa-fixes-${round}`, phase: 'QA', schema: S_BUILD }
+    { agentType: 'developer', label: `dev:qa-fixes-${round}`, phase: 'QA', schema: S_BUILD, effort: EFFORT.fix }
   )
 }
 
@@ -529,6 +551,7 @@ let panel = (await parallel(
         label: `judge:${p.name}`,
         phase: 'Customer Panel',
         schema: S_JUDGE,
+        effort: EFFORT.judge,
       })
     }
   })
@@ -569,7 +592,7 @@ re-run their goal.
 
 Keep it small — this is one round. Append the Ranked fixes table to
 ${DOCS}/05-customer-feedback.md.`,
-    { agentType: 'product-manager', label: `pm:triage-${refineRounds}`, phase: 'Refinement', schema: S_TRIAGE }
+    { agentType: 'product-manager', label: `pm:triage-${refineRounds}`, phase: 'Refinement', schema: S_TRIAGE, effort: EFFORT.triage }
   )
 
   const accepted = (triage && triage.accepted) || []
@@ -591,7 +614,7 @@ Keep the designer's tokens and the architecture's boundaries intact.
 
 Before returning, from ${DIR}: \`npm run lint && npm run build && npm test\` all pass, and
 commit: fix(${cfg.slug}): customer feedback round ${refineRounds}.`,
-    { agentType: 'developer', label: `dev:refine-${refineRounds}`, phase: 'Refinement', schema: S_BUILD }
+    { agentType: 'developer', label: `dev:refine-${refineRounds}`, phase: 'Refinement', schema: S_BUILD, effort: EFFORT.fix }
   )
 
   const regression = await agent(
@@ -607,7 +630,7 @@ ${DOCS}/05-customer-feedback.md:
 ${bullets(accepted, function (a) { return `  ${a.fix} — fixed means: ${a.fixedMeans}` })}
 
 Append a round section to ${DOCS}/04-qa-report.md. Tests only — never product source.`,
-    { agentType: 'qa-engineer', label: `qa:regression-${refineRounds}`, phase: 'Refinement', schema: S_QA }
+    { agentType: 'qa-engineer', label: `qa:regression-${refineRounds}`, phase: 'Refinement', schema: S_QA, effort: EFFORT.qa }
   )
 
   if (regression) {
@@ -628,6 +651,7 @@ Append a round section to ${DOCS}/04-qa-report.md. Tests only — never product 
           label: `judge:${p.name}:r${refineRounds + 1}`,
           phase: 'Refinement',
           schema: S_JUDGE,
+          effort: EFFORT.judge,
         })
       }
     })
@@ -668,7 +692,7 @@ confused people tells you where the code is fragile.
 
 Write ${DOCS}/07-architecture-review.md with a GO / GO_WITH_RISK / NO_GO verdict. A GO on
 something you would not deploy is a failure of your job.`,
-  { agentType: 'tech-lead', label: 'techlead:review', phase: 'Sign-off', schema: S_REVIEW }
+  { agentType: 'tech-lead', label: 'techlead:review', phase: 'Sign-off', schema: S_REVIEW, effort: EFFORT.review }
 )
 
 const release = await agent(
@@ -693,7 +717,7 @@ Lead with how to try it — the command, the URL, and the three steps that show 
 the product. Every "proven" row cites a command you ran and its real result. Every gap is
 specific enough to act on. Do not round the verdict up: an exhausted gate is caveats at best,
 and a READY the founder cannot trust costs more than a NOT READY.`,
-  { agentType: 'release-manager', label: 'release:report', phase: 'Sign-off', schema: S_RELEASE }
+  { agentType: 'release-manager', label: 'release:report', phase: 'Sign-off', schema: S_RELEASE, effort: EFFORT.release }
 )
 
 // ---------------------------------------------------------------- return

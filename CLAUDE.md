@@ -38,6 +38,17 @@ harness, a tweak to an agent prompt, a bug in a script), just do it directly.
 - The orchestrator passes **structured JSON** between stages and **file paths** for
   the detail. Agents get fresh context, so every prompt must name the files to read.
 
+## Cost
+
+Match the model tier and reasoning effort to the work. Wiring up a build config is
+not the same kind of task as deciding what to cut from the scope, and paying the
+same rate for both is waste. Simple, mechanical, spec-already-decided work gets low
+effort; work where judgement determines whether the product is any good gets high.
+
+The orchestrator's per-stage defaults live in the `EFFORT` table at the top of
+`.claude/workflows/ship-product.js` and are overridable per run via
+`args.effort`. Apply the same judgement to any agent you dispatch by hand.
+
 ## Conventions
 
 - House stack for built products: TypeScript + Vite + React, Vitest, Playwright.

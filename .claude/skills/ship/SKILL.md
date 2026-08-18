@@ -22,6 +22,7 @@ Everything after `/ship` is the idea, except trailing flags:
 | `--depth standard` | *(default)* 3 judges, 2 fix rounds, 1 refinement round |
 | `--depth deep` | 3 judges, 2 fix rounds, 2 refinement rounds |
 | `--slug <name>` | Override the derived slug |
+| `--effort <key>=<level>` | Override one stage's reasoning effort, e.g. `judge=high`. Repeatable. Keys: `prd`, `architecture`, `design`, `scaffold`, `build`, `fix`, `qa`, `judge`, `triage`, `review`, `release` |
 
 If the "idea" is actually a question about the harness, or a change to an existing
 product, this is the wrong command — answer directly, or use `/agency-refine`.
@@ -57,9 +58,14 @@ Workflow({
     judges, maxFixRounds, maxRefineRounds,   // from the depth preset
     maxSlices: 4,
     minScore: 8,
+    effort: { ... },                   // only the keys the founder overrode
   },
 })
 ```
+
+Leave `effort` out unless the founder asked for it. The per-stage defaults in the
+workflow already run scope and architecture decisions at high effort and scaffolding
+and triage at low, so a run does not pay senior rates for boilerplate.
 
 It runs in the background and returns a task id; a notification arrives when it is
 done. Do not poll it, do not re-invoke it, and do not guess at its results — wait

@@ -86,6 +86,12 @@ Depth presets:
 | `standard` *(default)* | 3 | 2 | 1 | a working, tested, critiqued MVP |
 | `deep` | 3 | 2 | 2 | above, plus a second refinement pass |
 
+Effort is tuned per stage rather than per run — scope and architecture decisions
+run at high effort, scaffolding and triage at low — so a run does not pay senior
+rates for boilerplate. The defaults are the `EFFORT` table in
+`.claude/workflows/ship-product.js`; override one with
+`/ship <idea> --effort judge=high`.
+
 ## Where things land
 
 ```
