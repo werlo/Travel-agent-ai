@@ -38,8 +38,14 @@ Workflow({
 })
 ```
 
-The full pipeline is the wrong tool for a two-line change — it would re-plan and
-re-architect a product that already exists. For anything small, do it directly
+`refineOnly: true` skips Discovery, Architecture and Design — those documents already
+exist and re-running them would throw away work and renumber requirements the panel
+scored against. Instead the PM reads the existing PRD, the readiness report, the QA
+bugs and the panel feedback, folds the founder's direction in, and returns a ranked
+`fixList`; the orchestrator groups it into slices and runs developers over them, then
+the full QA → panel → refinement → sign-off tail. Roughly 10 agents against 19.
+
+The full pipeline is still the wrong tool for a two-line change. For anything small, do it directly
 instead: dispatch a `developer` agent with the founder's exact words and the
 relevant docs, then a `qa-engineer` agent for a regression pass. Two agents, minutes
 instead of an hour. Use the workflow when the change touches scope, architecture or

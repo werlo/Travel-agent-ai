@@ -6,6 +6,7 @@ export const meta = {
     { title: 'Discovery', detail: 'PM turns the brief into a testable MVP definition' },
     { title: 'Architecture & Design', detail: 'Tech Lead and Designer, in parallel' },
     { title: 'Build', detail: 'Developer implements the architecture slices in order' },
+    { title: 'Fixes', detail: 'Refinement runs: developer works the PM-ranked fix list' },
     { title: 'QA', detail: 'E2E against every acceptance criterion, then fix rounds' },
     { title: 'Customer Panel', detail: 'Persona judges drive the live app blind' },
     { title: 'Refinement', detail: 'Triage, fix, regress, re-judge' },
@@ -108,6 +109,19 @@ const S_PRD = {
       type: 'array',
       items: { type: 'string' },
       description: 'Only the three cases the playbook allows; empty otherwise',
+    },
+    fixList: {
+      type: 'array',
+      description: 'Refinement runs only: the ranked work, highest value first',
+      items: {
+        type: 'object',
+        required: ['title', 'fixedMeans'],
+        properties: {
+          title: { type: 'string' },
+          requirements: { type: 'array', items: { type: 'string' } },
+          fixedMeans: { type: 'string', description: 'The observable change that means it is done' },
+        },
+      },
     },
   },
 }
@@ -314,12 +328,68 @@ function bullets(items, fmt) {
   return (items || []).map(fmt).join('\n')
 }
 
+// Group a ranked fix list into at most n build slices, keeping rank order so the
+// highest-value work lands first and a slice that fails costs the least.
+function fixSlices(fixes, n) {
+  const list = fixes || []
+  if (!list.length) return []
+  const count = Math.min(n, list.length)
+  const per = Math.ceil(list.length / count)
+  const out = []
+  for (let i = 0; i < list.length; i += per) {
+    const group = list.slice(i, i + per)
+    out.push({
+      id: `F${out.length + 1}`,
+      title: group.map(function (f) { return f.title }).join(' + '),
+      requirements: group.reduce(function (a, f) { return a.concat(f.requirements || []) }, []),
+      doneWhen: group.map(function (f) { return f.fixedMeans }).join(' AND '),
+      fixes: group,
+    })
+  }
+  return out
+}
+
 // ---------------------------------------------------------------- 1. Discovery
 
 phase('Discovery')
-log(`Brief received for "${cfg.slug}". Staffing the run: PM, Tech Lead, Designer, Developer, QA, ${cfg.judges} customer judges, Release Manager.`)
+log(
+  cfg.refineOnly
+    ? `Refinement run on "${cfg.slug}". Skipping Discovery, Architecture and Design — those documents already exist. Staffing: PM, Developer, QA, ${cfg.judges} customer judges, Tech Lead, Release Manager.`
+    : `Brief received for "${cfg.slug}". Staffing the run: PM, Tech Lead, Designer, Developer, QA, ${cfg.judges} customer judges, Release Manager.`
+)
 
-const prd = await agent(
+const prd = cfg.refineOnly
+  ? await agent(
+      `You are the Product Manager. This product already exists and has been through a full
+run. The founder has come back with direction, and your job is to turn it into ranked work —
+not to re-plan the product.
+
+${CONTEXT}
+
+Read, in this order:
+  ${DOCS}/01-prd.md              — the requirements that already exist. Reuse their IDs.
+  ${DOCS}/06-readiness-report.md — the verdict, the proven list and the gaps
+  ${DOCS}/07-architecture-review.md — the Tech Lead's drift list and estimates
+  ${DOCS}/04-qa-report.md        — open bugs by severity
+  ${DOCS}/05-customer-feedback.md — what the panel actually said
+
+The founder's direction:
+${cfg.founderFeedback || 'Close the gaps in the readiness report, highest value first.'}
+
+Return the existing PRD's structure faithfully — same requirement IDs, same screens, the
+same personas (the panel must re-judge as the same people, or the scores are not
+comparable). Where the founder's direction adds something genuinely new, add it as a new
+R-numbered requirement with a proper acceptance criterion and append it to
+${DOCS}/01-prd.md; do not renumber what is already there.
+
+Then return \`fixList\` — the ranked work, highest value first. Rank by (users affected x
+severity) / effort. Anything the founder named explicitly goes in regardless of rank.
+Each item states what observable change means it is done, precisely enough that QA can
+verify it without asking you. Reject nothing silently: if the founder asked for something
+you believe is wrong, include it and say so in your notes.`,
+      { agentType: 'product-manager', label: 'pm:refine-brief', phase: 'Discovery', schema: S_PRD, effort: EFFORT.design }
+    )
+  : await agent(
   `You are the Product Manager. Turn the founder's brief into the MVP definition.
 
 ${CONTEXT}
@@ -334,12 +404,16 @@ messy input they arrive with — those personas become the customer panel that j
 this product, so thin personas produce a useless panel.
 
 Decide every ambiguity yourself and record it under Assumptions. Do not ask the founder.`,
-  { agentType: 'product-manager', label: 'pm:prd', phase: 'Discovery', schema: S_PRD, effort: EFFORT.prd }
-)
+      { agentType: 'product-manager', label: 'pm:prd', phase: 'Discovery', schema: S_PRD, effort: EFFORT.prd }
+    )
 
 if (!prd) throw new Error('Discovery failed: no PRD produced. Nothing downstream can proceed.')
 
-log(`PRD: "${prd.productName}" — ${prd.requirements.length} requirements, ${prd.screens.length} screens, ${prd.personas.length} personas.`)
+log(
+  cfg.refineOnly
+    ? `Plan: ${(prd.fixList || []).length} ranked fixes against ${prd.requirements.length} existing requirements.`
+    : `PRD: "${prd.productName}" — ${prd.requirements.length} requirements, ${prd.screens.length} screens, ${prd.personas.length} personas.`
+)
 if (prd.escalations && prd.escalations.length) {
   log(`ESCALATION for the founder: ${prd.escalations.join(' | ')}`)
 }
@@ -349,6 +423,10 @@ const reqList = bullets(prd.requirements, function (r) { return `  ${r.id}: ${r.
 // ---------------------------------------------------------------- 2. Architecture & Design
 // Barrier is deliberate: the developer cannot start until both documents exist.
 
+let arch = null
+let design = null
+
+if (!cfg.refineOnly) {
 phase('Architecture & Design')
 
 const pair = await parallel([
@@ -396,30 +474,62 @@ observable in the running UI by someone who never read your document.`,
   },
 ])
 
-const arch = pair[0]
-const design = pair[1]
+arch = pair[0]
+design = pair[1]
 
 if (!arch) throw new Error('Architecture stage failed: no work breakdown, so the build cannot be dispatched.')
 if (!design) log('WARNING: the design spec failed to produce a summary — the build will proceed against the PRD alone and UX checks will be thin.')
+log(`Architecture: ${arch.stack}. Design: ${design ? design.uxChecks.length : 0} UX checks.`)
+}
 
-const slices = (arch.slices || []).slice(0, cfg.maxSlices)
-const uxList = design ? bullets(design.uxChecks, function (u) { return `  ${u.id}: ${u.check}` }) : '  (no UX checklist produced)'
-log(`Architecture: ${arch.stack}. ${slices.length} build slices. Design: ${design ? design.uxChecks.length : 0} UX checks.`)
+const slices = cfg.refineOnly
+  ? fixSlices(prd.fixList, cfg.maxSlices)
+  : (arch.slices || []).slice(0, cfg.maxSlices)
+
+const uxList = design
+  ? bullets(design.uxChecks, function (u) { return `  ${u.id}: ${u.check}` })
+  : `  (the full UX1..UXn checklist is in ${DOCS}/03-design.md — read it, every check still applies)`
+
+if (!slices.length) throw new Error('Nothing to build: no slices and no ranked fixes.')
+log(`${slices.length} ${cfg.refineOnly ? 'fix' : 'build'} slice(s) to implement.`)
 
 // ---------------------------------------------------------------- 3. Build
 // Sequential on purpose: slices share a working tree and each builds on the last.
 
-phase('Build')
+phase(cfg.refineOnly ? 'Fixes' : 'Build')
 
 const builds = []
 for (let i = 0; i < slices.length; i++) {
   const s = slices[i]
   const prior = builds.length
-    ? `Slices already done: ${builds.map(function (b) { return b && b.sliceId }).filter(Boolean).join(', ')}. Read the existing code before adding to it — do not re-create what is already there.`
-    : `This is the first slice. The product directory contains only docs/ — you are scaffolding from scratch.`
+    ? `Already done in this run: ${builds.map(function (b) { return b && b.sliceId }).filter(Boolean).join(', ')}. Read the existing code before adding to it — do not re-create what is already there.`
+    : cfg.refineOnly
+      ? `The product is already built and passing its own unit tests. You are changing working code, so read it before you touch it and keep every behaviour nobody complained about.`
+      : `This is the first slice. The product directory contains only docs/ — you are scaffolding from scratch.`
 
-  const result = await agent(
-    `You are the Developer. Implement slice ${s.id}: ${s.title}.
+  const body = cfg.refineOnly
+    ? `You are the Developer. Fix round ${s.id} on a product that already exists and shipped NOT READY.
+
+${CONTEXT}
+
+${prior}
+
+Read ${DOCS}/01-prd.md (the requirements, unchanged unless the PM appended new ones),
+${DOCS}/02-architecture.md (module map and contracts — stay inside them) and
+${DOCS}/03-design.md (tokens and copy). For each item below, the detail and the repro are
+in ${DOCS}/04-qa-report.md, ${DOCS}/05-customer-feedback.md and
+${DOCS}/07-architecture-review.md.
+
+Implement these, in order:
+${bullets(s.fixes, function (f) { return `  - ${f.title}\n    fixed means: ${f.fixedMeans}${(f.requirements || []).length ? `\n    touches: ${f.requirements.join(', ')}` : ''}` })}
+
+Fix causes, not symptoms — every one of these reached the founder because the product
+said something that was not true, so a fix that only changes the wording of a false
+statement is not a fix. Reproduce each before you change anything. Stay inside this list.
+
+Before returning, from ${DIR}: run \`npm run lint && npm run build && npm test\` and put
+the real result in your summary. All must pass. Then commit: fix(${cfg.slug}): ${s.id} — <one line>.`
+    : `You are the Developer. Implement slice ${s.id}: ${s.title}.
 
 ${CONTEXT}
 
@@ -435,9 +545,15 @@ Implement only this slice. Use the designer's tokens and copy exactly as written
 stubs or placeholder content on any path the PRD covers.
 
 Before returning, from ${DIR}: run \`npm run lint && npm run build && npm test\` and put
-the real result in your summary. All must pass. Then commit: feat(${cfg.slug}): ${s.id} — <one line>.`,
-    { agentType: 'developer', label: `dev:${s.id}`, phase: 'Build', schema: S_BUILD, effort: i === 0 ? EFFORT.scaffold : EFFORT.build }
-  )
+the real result in your summary. All must pass. Then commit: feat(${cfg.slug}): ${s.id} — <one line>.`
+
+  const result = await agent(body, {
+    agentType: 'developer',
+    label: `dev:${s.id}`,
+    phase: 'Build',
+    schema: S_BUILD,
+    effort: !cfg.refineOnly && i === 0 ? EFFORT.scaffold : EFFORT.build,
+  })
 
   builds.push(result)
   if (result) {
