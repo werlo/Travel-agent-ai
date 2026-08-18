@@ -48,8 +48,8 @@ describe('App shell', () => {
   })
 
   it('renders no summary bar until there is something to summarise', () => {
-    render(<App />)
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    const { container } = render(<App />)
+    expect(container.querySelector('.summary-bar')).toBeNull()
   })
 
   it('advances off the vibe screen on Continue and moves focus to the new h1', async () => {
@@ -60,7 +60,7 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
     const heading = screen.getByRole('heading', { level: 1 })
-    expect(heading).toHaveTextContent('Trip basics are next')
+    expect(heading).toHaveTextContent('Your trip basics')
     expect(document.activeElement).toBe(heading)
     expect(
       screen.queryByRole('heading', { name: 'What kind of trip do you want?' }),
@@ -73,9 +73,9 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Beach' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
-    expect(screen.getByText(/your Beach choice is remembered/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Change your vibe' }))
+    await user.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('button', { name: 'Beach' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
   })

@@ -150,7 +150,7 @@ test.describe('S1 — Vibe screen', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Beach', exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
-    await page.getByRole('button', { name: 'Change your vibe' }).click()
+    await page.getByRole('button', { name: 'Back' }).click()
     await expect(page.getByRole('button', { name: 'Beach', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
