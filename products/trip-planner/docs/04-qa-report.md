@@ -1038,4 +1038,296 @@ Added:
 
 Changed: none.
 
+---
+
+# QA Report — Compass (trip-planner) — Round 5
+
+**Author:** QA Engineer · **Round:** 5 · **Date:** 2026-08-18 · **Verdict: PASS**
+
+**SHALLOW PASS — SCOPE: LIVE PRICE LAYER ONLY.** The founder explicitly scoped this
+round narrowly: verify the new `src/data/livePrices/` overlay (developer commit
+`87f02db`) and nothing else. This is **not** a full regression sweep — the
+responsive/keyboard/console/reload/hostile-input/double-submit sweeps from rounds
+1–4 were **not** re-run this round because nothing that produces those results
+changed (confirmed against the diff: `87f02db --stat` touches no screen other than
+adding one new, conditionally-empty section to S5, and no shared layout, state
+machine, or existing component). Full `npm test`/`npm run e2e` (the whole suite,
+unmodified specs included) **were** re-run in full and are green — see below. Round
+1–4's own sweep results stand unchanged and are not restated here.
+
+## THE MAIN CAVEAT OF THIS ROUND — read this first
+
+**Nothing in this round is a real-network test.** There are still no real
+Travelpayouts or Booking.com API keys, and there is no way to get one from inside
+this environment. Every claim below about the two providers' request/response
+handling is checked **only** against their own documented contract in
+`docs/02-architecture.md` §13 and their own source comments — never against a live
+account, because none exists. Specifically **untested and unverifiable today**:
+
+- Whether `travelpayoutsProvider.ts`'s POST body, MD5 signature, or polling
+  sequence is actually accepted by `api.travelpayouts.com` — the signature
+  algorithm is implemented from Travelpayouts' own documented description
+  (`signature.ts`) and locked with a golden-value unit test, but "matches the
+  docs" and "matches the server" are different claims, and only the first is
+  checked here.
+- Whether `findProposals`' recursive walk finds the real `flight_search_results`
+  shape, or whether the `dealUrl` fallback (`https://www.aviasales.com{url}`) is
+  the right host to join a relative booking link onto.
+- Whether `bookingProvider.ts`'s request body (`checkin`/`checkout`/`destination`/
+  `occupancy`) or `SEARCH_URL` path (`/3.1/accommodations/search`) match the
+  Booking.com Demand API v3 **at all** — the developer's own comment states this
+  schema was never observed, only guessed at defensively, because Partner Hub's
+  docs render client-side and there is no partner access yet.
+- Whether the `user_ip`-omitted assumption in `searchFlight` is correct.
+- Any real currency/amount/rounding correctness in a live quote — `amountMinor`,
+  `formatRupees` conversion, and the ₹-only filter (`inrOnly`) are exercised in
+  unit tests with fabricated fixtures, never with a number that actually came from
+  either API.
+
+**This needs a first-real-key smoke test the moment the founder has credentials.**
+That smoke test should specifically re-check: the signature is accepted (no 401
+from Travelpayouts), a real `flight_search_results` payload is found by
+`findProposals` and priced correctly, a real Booking.com response is not silently
+swallowed by `findPricedNode` returning `null` for an actually-successful call,
+and the CSP is deliberately widened (see below) before any of that is possible in
+production. None of that can be faked or waived from this environment — it is
+recorded here as an open item, not folded into the PASS below.
+
+## What was verified (real, not deferred)
+
+### 1. Full command chain
+
+```
+$ npm run lint
+> compass-trip-planner@0.1.0 lint
+> eslint . --max-warnings=0 && tsc --noEmit
+(no output — clean, includes the new e2e/live-price-csp-resilience.spec.ts)
+
+$ npm run build
+> compass-trip-planner@0.1.0 build
+> tsc -b --noEmit false && vite build
+vite v5.4.21 building for production...
+transforming...
+✓ 88 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   1.11 kB │ gzip:  0.64 kB
+dist/assets/index-ckkePgpo.css   24.55 kB │ gzip:  4.87 kB
+dist/assets/index-BZ2g7VdY.js   316.91 kB │ gzip: 94.06 kB
+✓ built in 1.02s
+
+$ npm test
+ Test Files  28 passed (28)
+      Tests  530 passed (530)
+   Duration  26.94s
+
+$ npm run e2e
+  227 passed (5.2m)
+```
+
+- **530/530 unit tests** — matches the developer's claim (511 pre-existing + 19
+  new) exactly, independently confirmed by running the suite myself.
+- **227/227 E2E** — 226 pre-existing specs (matches the developer's claim) **plus
+  1** new spec QA added this round (`live-price-csp-resilience.spec.ts`, see item
+  3 below). Zero failures, zero flakes across two full runs.
+- **Bundle: 94.06 kB gzip JS**, up from round 4's confirmed 90.03 kB — matches the
+  developer's claimed +4.03 kB (`js-md5`) exactly, confirmed by rebuilding myself,
+  not taken on the commit message's word.
+
+### 2. The no-key path is truly inert
+
+With no `VITE_TRAVELPAYOUTS_*`/`VITE_BOOKING_*` env vars set (confirmed: no
+`.env`/`.env.local` file exists anywhere on disk in `products/trip-planner`,
+`ls .env*` shows only the tracked `.env.example`) — today's real deployed state:
+
+- `e2e/control-export.spec.ts`'s `the app talks to nobody / no network request
+  leaves localhost across the whole flow` test still passes, unmodified, and does
+  genuinely exercise the plan screen where `<LivePriceCheck>` is now mounted
+  (`planFor()` drives vibe → basics → skip-to-plan → the S5 plan screen with
+  `.plan-hero__facts` visible, then asserts `offsite`/`failures`/`errors` are all
+  `[]`) — read directly, not assumed from a green checkmark.
+- Independently re-confirmed with a manual driver against the same running dev
+  server (no env vars set): after reaching the plan screen and waiting 1.5 s past
+  any effect, `page.locator('.plan-section--liveprice').count()` and
+  `page.locator('#plan-liveprice').count()` are both **0**. The section is absent
+  from the DOM, not present-and-hidden — `LivePriceCheck.tsx` returns `null`
+  before rendering the `<section>` at all when both quotes are `null`, matching
+  its own contract.
+- Zero console errors, zero non-localhost requests, zero request failures across
+  the whole flow (from the same unmodified test).
+
+### 3. The CSP-blocks-it-anyway finding, independently confirmed — and now covered by a new spec
+
+Added `e2e/live-price-csp-resilience.spec.ts`. Rather than relaxing the *dev*
+server's CSP (which is already loosened for HMR — `vite.config.ts`'s `DEV_CSP`
+allows `connect-src 'self' ws://localhost:*`, not the shipped policy), this spec
+builds a real **production** bundle (`vite build`) with a fake
+`VITE_TRAVELPAYOUTS_TOKEN`/`VITE_TRAVELPAYOUTS_MARKER` pair, serves it with `vite
+preview` on its own port, and drives that with a fresh browser page — entirely
+independent of the shared `playwright.config.ts` `webServer`, so no other spec and
+no product source needed to change. It asserts the page is genuinely running the
+exact shipped string first (`default-src 'self'; connect-src 'none'; img-src
+'self' data:`) before trusting anything else.
+
+Real console output captured from this spec (Chromium):
+```
+[error] Refused to connect to 'https://api.travelpayouts.com/v1/flight_search'
+        because it violates the following Content Security Policy directive:
+        "connect-src 'none'".
+[error] Fetch API cannot load https://api.travelpayouts.com/v1/flight_search.
+        Refused to connect because it violates the document's Content Security
+        Policy.
+[warn]  [compass] E-LIVEPRICE-FLIGHT TypeError: Failed to fetch
+```
+
+This confirms, independently of the developer's own note in §13:
+
+- (a) **This is a real, named CSP violation** (`Refused to connect ... connect-src
+  'none'`), not a generic network error — the browser itself is the thing that
+  blocked it, matching the architecture's stated gap exactly.
+- (b) **No crash, no unhandled rejection, no hang.** `pageerror` events: none.
+  `travelpayoutsProvider.ts`'s `catch` block runs exactly as documented
+  (`console.warn('[compass] E-LIVEPRICE-FLIGHT', error)`, then resolves `null`) —
+  the `LivePriceProvider` contract's "must never throw" promise holds under the
+  literal failure mode Booking.com/Travelpayouts calls will hit today.
+  `providers.hotels` is `null` in this scenario (only the Travelpayouts token was
+  faked) so no hotel-side call is attempted, which is separately covered by the
+  unit tests' `getHotelQuote resolves null, not a rejection ... when the network
+  fails` case.
+- (c) **The live-price section still doesn't render** — `.plan-section--liveprice`
+  and `#plan-liveprice` both have DOM count 0, same as the no-key path.
+
+One implementation note for whoever touches this spec later: the first draft
+spawned `vite` via `npx vite ...`, and `server.kill()` in `afterAll` did not
+reliably kill the process `npx` itself forked — a `vite preview` process and its
+bound port (4577) survived past the test run. Fixed by spawning the local
+`node_modules/.bin/vite` binary directly (`detached: true`) and killing its
+process group in `afterAll`. Verified clean: ran the spec twice, confirmed via
+`ps aux` and `curl` against port 4577 that nothing was left running either time,
+and ran it inside the full `npm run e2e` suite without leaking into other specs.
+
+### 4. Bundle size sanity — see item 1. Confirmed 94.06 kB gzip, matches claim exactly.
+
+### 5. Provider skim against their own stated contract
+
+**`travelpayoutsProvider.ts`** — fair-faith match to the docs/02-architecture.md
+§13 description: `POST /v1/flight_search` with the documented body shape
+(`marker`, `host`, `locale`, `trip_class`, `passengers`, `segments`, `currency`,
+`signature`), poll `GET /v1/flight_search_results?uuid=...` up to 3 times at
+1.5 s apart with a 6 s overall `AbortController` timeout — matches the numbers
+claimed in §13 exactly. Independently recomputed the MD5 golden-vector test by
+hand (`md5('tok_test:aff123:' + <same 11 sorted values>)`) and got
+`664f15e41a34efec3f2e7b28c188a347` — the exact value asserted in
+`tests/livePrices.test.ts`, confirming the signature test isn't a copy-paste of
+whatever the code happens to output. `findProposals` is a bounded (depth ≤ 8)
+recursive walk, consistent with the "schema not pinned down" caveat. Both methods
+route every failure through a `try/catch` that resolves `null`, per the
+`LivePriceProvider` contract in `types.ts` — spot-checked against 401, malformed
+JSON, and thrown-`fetch` cases, all three resolve `null` (mirrors the dedicated
+unit tests, independently re-read against the source rather than trusted from the
+test file alone).
+
+**`bookingProvider.ts`** — auth wiring (`Authorization: Bearer`, `X-Affiliate-Id`)
+is present as claimed; the file's own top-of-file comment states the request body
+and response schema are unverified, and the code matches that admission — nothing
+here claims certainty it doesn't have. Spot-checked two failure branches by
+reading the source directly (not just running the existing tests): (1) a response
+with no price-shaped node anywhere (`findPricedNode` returns `null` for e.g.
+`{ status: 'ok', results: [] }`) resolves `getHotelQuote` to `null`, never
+throws; (2) a thrown `fetch` (simulated network failure) is caught by the outer
+`try/catch` in `createBookingProvider`, warns `E-LIVEPRICE-HOTEL`, resolves
+`null`. `parseHotelResponse` itself has its own inner `try/catch` as a second
+layer in case `findPricedNode`'s field access throws on a truly pathological
+shape (e.g. a getter that throws) — genuinely defensive, not decorative.
+
+### 6. No real secrets anywhere
+
+- `git log --all -p -- '*.env'` — **zero output**, repo-wide, all history: no
+  `.env`/`.env.local` file has ever been committed.
+- `git log --all --name-only --diff-filter=A` filtered for `.env`/`.env.local` —
+  zero matches.
+- `products/trip-planner/.env` does not exist on disk (only the tracked
+  `.env.example`, which holds only placeholder strings like
+  `your-travelpayouts-api-token`).
+- `.gitignore` (repo root) covers `.env`, `.env.*` (with `!.env.example`
+  carved out) and `*.local` — `.env.local` is confirmed git-ignored
+  (`git check-ignore -v .env.local` returns a match).
+
+## Requirement / contract coverage this round
+
+| Item | Check | Result |
+|---|---|---|
+| §13 invariant — no import from `src/domain/**` | Read `src/data/livePrices/**` and `LivePriceCheck.tsx`; no import touches `src/domain/`, `generatePlanSet`, or `CatalogueSnapshot`. `plan.planId` is read only as the `useEffect` dependency key, never written. | PASS |
+| §13 — no-key path makes zero network calls | `resolveLivePriceProviders()` and both providers' `getFlightQuote`/`getHotelQuote` return `null` before any `fetch` when unconfigured — confirmed by unit tests (`fetchSpy` assertions) and independently by the E2E "talks to nobody" test. | PASS |
+| §13 — no-key path renders nothing in the DOM | `LivePriceCheck` returns `null` before any `<section>`, confirmed by direct DOM count = 0 (not just visual hiding). | PASS |
+| §13 — `LivePriceProvider` contract: never throws | Every `fetch`/parse path wrapped in `try/catch` resolving `null`; confirmed by source read (both providers) and by the new CSP-fake-key spec exercising the actual browser-level failure the real deployment will hit. | PASS |
+| §13 — CSP blocks the overlay even with real keys | Independently reproduced with a fake key against a real production build: genuine CSP violation naming `connect-src`, not a generic error. | CONFIRMED (developer's finding stands, unresolved by design, tracked as a Deviation in `02-architecture.md` — correctly so, not this round's job to fix) |
+| Bundle size claim (90.03 kB → 94.06 kB) | Rebuilt independently, exact match. | PASS |
+| No real secrets | `git log --all -p`, disk check, `.gitignore` check. | PASS |
+| Provider fair-faith match to their own documented contract | Read both providers against §13's description; travelpayoutsProvider.ts matches; bookingProvider.ts honestly flags its own schema as unverified and defends against it. | PASS |
+
+## Not re-run this round (by design, per scope)
+
+Per the founder's explicit shallow-pass instruction: responsive 360/768/1280,
+keyboard-only, console-hygiene, reload-mid-flow, hostile-input and double-submit
+sweeps were **not** re-driven this round. Nothing under this diff changes layout,
+keyboard flow, or existing state machines — the only new surface is one
+conditionally-empty `<section>` appended after the existing "stay" section on S5,
+and it renders nothing at all in the current no-key deployment, so there is
+nothing new for those sweeps to exercise today. Round 4's sweep results
+(`docs/04-qa-report.md`, rounds 1–4) stand unchanged. This is intentionally
+narrower than a full round and should not be read as those sweeps having been
+re-verified.
+
+## Bugs
+
+None found this round. Zero open S1 or S2, unchanged from round 4.
+
+| ID | Sev | Title | Status |
+|---|---|---|---|
+| B3 | S3 | Travellers 2→4 at ₹60,000 switches destination (A19) | Unchanged — documented, not a bug (round 2/3 finding stands). |
+| B10 | S4 | Season row has no tax qualifier | Unchanged — accepted as documented (round 2/3 finding stands). |
+
+**Open S1: 0. Open S2: 0. Open S3: 1 (B3, documented). Open S4: 1 (B10, documented).**
+
+## Untested / not covered (explicit, not a footnote)
+
+| Item | Why |
+|---|---|
+| **Everything against a real Travelpayouts or Booking.com account** — signature acceptance, real response shapes, real quote correctness, the `dealUrl`/`user_ip` assumptions | No API keys exist. Cannot be tested from this environment under any circumstance. **This is the main caveat of this round** — see the top of this section. Needs a first-real-key smoke test the moment credentials exist, before the CSP is widened for production use. |
+| Full responsive/keyboard/console/reload/hostile-input/double-submit sweeps | Explicitly out of scope this round (shallow pass) — see "Not re-run this round" above. Round 1–4 results stand for the surfaces that existed before this diff. |
+| Everything already carried as UNTESTED from rounds 1–4 (real screen-reader output, real OS clipboard buffer, WCAG contrast ratios, dark colour scheme, 320px/200% zoom, Firefox/WebKit, the numeric performance budget, season windows other than Dec/Jul, child ages 0–1, the full 42-pair R7 invariant driven through the UI) | Unchanged from round 4, for the same reasons recorded there. |
+
+## Verdict
+
+**PASS.** Zero open S1, zero open S2. `npm run lint`, `npm run build`, `npm test`
+and `npm run e2e` all exit 0 — 530 unit tests (511 + 19 new) and 227 E2E tests
+(226 pre-existing + 1 new), all green, independently re-run rather than taken on
+the developer's word. The no-key deployed default is verified genuinely inert
+(zero network, zero console output, zero DOM footprint). The CSP-blocks-it-anyway
+finding is independently reproduced against a real production build with a fake
+key, and the resilience contract (`LivePriceProvider` never throws) is proven to
+hold under that exact failure, not just asserted in a docstring. No real secrets
+exist anywhere in the repository's history or on disk. No file under `src/` was
+modified.
+
+**This PASS covers only what commit `87f02db` actually ships today: a no-key,
+zero-network overlay.** It explicitly does **not** cover whether the live-price
+feature will work once real keys are added — that is unverifiable today and is
+the load-bearing caveat of this round, not a minor footnote. The founder should
+treat "first real key acquired" as a required trigger for a follow-up QA pass
+before this feature is considered load-bearing in production, independent of
+today's PASS.
+
+### Files QA added or changed this round
+
+Added:
+- `products/trip-planner/e2e/live-price-csp-resilience.spec.ts` — independently
+  confirms the CSP-blocks-it-anyway finding and the `LivePriceProvider`
+  never-throws contract against a real production build with a fake key (1 test).
+
+Changed: none.
+
+No file under `src/` was modified.
+
 No file under `src/` was modified.
