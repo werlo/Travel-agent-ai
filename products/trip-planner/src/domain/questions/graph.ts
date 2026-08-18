@@ -73,7 +73,7 @@ function haulNode(vibe: Vibe, next: string): QuestionNode {
   const id = `${vibe}-haul`
   return {
     id,
-    prompt: 'How long a flight are you willing to sit through?',
+    prompt: 'Happy with a long-haul flight, or keep it short?',
     defaultOptionId: 'no-preference',
     options: [
       {

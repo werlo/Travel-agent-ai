@@ -466,7 +466,7 @@ Skip link → AppBar `Start over` → start → end → budget → travellers �
 | # | Heading | Options (label / description) |
 |---|---|---|
 | Q1 | `Within India, or international?` | `Within India` — *Shorter flights, no visa, fewer surprises.* · `International` — *Passport out, more time in the air.* · `No preference` |
-| Q2a (after *International*) | `How long a flight are you willing to sit through?` | `Under 6 hours` — *Southeast Asia, the Gulf, Sri Lanka.* · `Happy with long-haul` — *Anywhere the budget reaches.* · `No preference` |
+| Q2a (after *International*) | `Happy with a long-haul flight, or keep it short?` | `Under 6 hours` — *Southeast Asia, the Gulf, Sri Lanka.* · `Happy with long-haul` — *Anywhere the budget reaches.* · `No preference` |
 | Q2b (after *Within India*) | `Which coast are you drawn to?` | `West coast` — *Konkan, Goa, Karnataka.* · `East coast` — *Tamil Nadu, Andhra, Odisha.* · `Islands` — *Andaman & Lakshadweep.* · `No preference` |
 | Q3 | `Lively beach or empty beach?` | `Lively` — *Shacks, music, people around.* · `Empty` — *Long walks, nobody there.* · `One lively night, otherwise quiet` — *A bit of both.* · `No preference` |
 | Q4 | `Resort comfort or local stays?` | `Resort comfort` — *Pool, service, predictable.* · `Local stays` — *Homestays and small properties.* · `No preference` |
@@ -666,8 +666,9 @@ not a screen: heading, the text area, then Copy.
 **Layout.** Native modal `<dialog>`, max-width 560px, `--space-6` padding. At 360 it is
 `calc(100vw - var(--space-4) * 2)` wide and the button row becomes two stacked
 full-width buttons. The textarea is 12 rows at ≥768 and 10 rows at 360, `--font-mono`,
-`--text-sm`, `readonly`, `white-space: pre`, vertical scroll only — the text is never
-wrapped or reflowed, because it is going to be pasted somewhere else.
+`--text-sm`, `readonly`, `white-space: pre-wrap`, vertical scroll only — long lines wrap
+visually so they stay readable at 360px (B5); the underlying value (and so the copied
+text) is unaffected by how it wraps on screen.
 
 **Content & copy.**
 - Dialog heading (`<h2>`, `--text-xl`): `Copy your trip`

@@ -34,9 +34,14 @@ export function groupIndian(value: number): string {
   return negative ? `-${grouped}` : grouped
 }
 
-/** 60000 -> '₹60,000'. */
+/**
+ * 60000 -> '₹60,000'; -9640 -> '−₹9,640' (B9). The sign sits outside the rupee
+ * symbol, using the same minus glyph (U+2212) the season basis line already
+ * uses for '−20%', rather than an ASCII hyphen wedged between ₹ and the digits.
+ */
 export function formatRupees(value: Rupees): string {
-  return `${RUPEE}${groupIndian(value)}`
+  const negative = value < 0
+  return `${negative ? '−' : ''}${RUPEE}${groupIndian(Math.abs(value))}`
 }
 
 /** Always a non-negative integer count of rooms: one room per two travellers (A7). */

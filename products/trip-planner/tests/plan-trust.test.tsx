@@ -59,7 +59,10 @@ async function planFor(
   const skip = screen.queryByRole('button', { name: 'Plan my trip now' })
   if (skip !== null) await user.click(skip)
 
-  await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+  await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
   return user
 }
 

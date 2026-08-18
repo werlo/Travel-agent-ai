@@ -54,6 +54,11 @@ describe('Indian digit grouping', () => {
   it('keeps negatives readable', () => {
     expect(groupIndian(-1200)).toBe('-1,200')
   })
+
+  it('B9: a negative amount reads with the minus outside the symbol, not ₹-', () => {
+    expect(formatRupees(-9640)).toBe('−₹9,640')
+    expect(formatRupees(-9640)).not.toContain('₹-')
+  })
 })
 
 describe('rooms and per-person rounding (A7, R8)', () => {

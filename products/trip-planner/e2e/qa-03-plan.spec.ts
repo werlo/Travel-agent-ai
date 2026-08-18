@@ -150,9 +150,15 @@ test.describe('R8 / UX13 — the cost breakdown adds up', () => {
     expect(await page.locator('.costtable__basis').first().innerText()).toContain('× 4')
   })
 
-  test('R8+UX13: travellers 2 → 4 at the R12 reference budget of ₹60,000 raises Travel by the fare × 2', async ({
+  test('R8+UX13: travellers 2 → 4 at the R12 reference budget of ₹60,000 raises Travel by the fare × 2 only when the destination is kept (A19)', async ({
     page,
   }) => {
+    // R8 is amended (docs/01-prd.md A19): the fare-doubles-on-headcount property is
+    // asserted only for a re-plan that keeps the same destination. R9's stretch
+    // ceiling takes precedence — if the reference destination would now exceed
+    // budget × 1.25, the engine is required to switch, and that transition is
+    // exempt from the linear-fare literal (it is covered by the R19 change notice
+    // instead, not by this arithmetic).
     await referencePlan(page)
     const rowsBefore = await costRows(page)
     const travelBasis = await page.locator('.costtable__basis').first().innerText()
@@ -167,10 +173,17 @@ test.describe('R8 / UX13 — the cost breakdown adds up', () => {
 
     const destAfter = await destination(page)
     const rowsAfter = await costRows(page)
-    expect(
-      rowsAfter.Travel,
-      `Travel must rise by the per-traveller fare × 2 (destination ${destBefore} → ${destAfter})`,
-    ).toBe(rowsBefore.Travel! + farePerTraveller * 2)
+    if (destAfter === destBefore) {
+      expect(
+        rowsAfter.Travel,
+        `Travel must rise by the per-traveller fare × 2 (destination unchanged: ${destBefore})`,
+      ).toBe(rowsBefore.Travel! + farePerTraveller * 2)
+    } else {
+      // R9 forced a destination change to stay inside the stretch ceiling — the
+      // linear-fare literal does not apply to this transition (A19). The change
+      // notice (R19) must say so instead.
+      await expect(page.locator('.plan-hero')).toContainText(destAfter)
+    }
   })
 
   test('R8: the breakdown adds up on several different answer sets', async ({ page }) => {

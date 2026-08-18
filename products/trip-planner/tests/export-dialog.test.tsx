@@ -28,7 +28,10 @@ async function toPlan(): Promise<User> {
   await user.click(screen.getByRole('button', { name: 'Continue' }))
   await screen.findByText(/^Question 1 of \d$/)
   await user.click(screen.getByRole('button', { name: 'Plan my trip now' }))
-  await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+  await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
   return user
 }
 

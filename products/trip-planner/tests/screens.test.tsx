@@ -133,7 +133,7 @@ describe('S3 — the adaptive questions (R4, R5, R6)', () => {
     expect(
       await screen.findByRole('heading', {
         level: 1,
-        name: 'How long a flight are you willing to sit through?',
+        name: 'Happy with a long-haul flight, or keep it short?',
       }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Happy with long-haul/ })).toBeInTheDocument()
@@ -210,7 +210,9 @@ describe('S4 and S5 — the plan (R5, R7, R8, R9, R13, R16)', () => {
     expect(
       screen.getByText(/under your budget|On budget|Stretch — |Nothing in this catalogue/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/^Plan [A-Z]{4}-5N-2P-B60-[0-9a-z]{4} · catalogue 2026-08-01$/)).toBeInTheDocument()
+    expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(
+      /^Plan [A-Z]{4}-5N-2P-B60-[0-9a-z]{4} · catalogue 2026-08-01$/,
+    )
 
     // R16 — the provenance line is on the screen that shows the prices.
     expect(screen.getByText(PROVENANCE_TEXT)).toBeInTheDocument()

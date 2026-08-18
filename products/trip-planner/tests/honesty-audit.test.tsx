@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../src/App'
 import { PROVENANCE_TEXT } from '../src/ui/components/ProvenanceLine'
@@ -98,7 +98,10 @@ describe('R16 — the honesty audit', () => {
     auditProvenance('S3')
 
     await user.click(screen.getByRole('button', { name: 'Plan my trip now' }))
-    await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+    await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
 
     // S5 — the plan. "Why this trip" is open on first render now (R19), so its
     // contents are swept without a click.
@@ -126,7 +129,10 @@ describe('R16 — the honesty audit', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     await screen.findByText(/^Question 1 of \d$/)
     await user.click(screen.getByRole('button', { name: 'Plan my trip now' }))
-    await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+    await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
 
     auditNames('S5 party')
 

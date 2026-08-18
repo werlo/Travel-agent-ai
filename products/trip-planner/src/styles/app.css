@@ -843,6 +843,12 @@ h1:focus:not(:focus-visible) {
   font-size: var(--text-xs);
 }
 
+/* B4 — each token (the plan ID, the catalogue date) never breaks mid-token; the
+   line can only wrap at the " · " between them. */
+.plan-hero__id-token {
+  white-space: nowrap;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -1307,8 +1313,10 @@ h1:focus:not(:focus-visible) {
 }
 
 /*
-  `white-space: pre` and vertical-only scrolling: the text is going to be pasted
-  somewhere else, so it must never be wrapped or reflowed (docs/03-design.md §4 S6).
+  B5 — `white-space: pre-wrap` visually wraps long lines instead of clipping
+  them, while keeping every character (including the newlines) intact in the
+  underlying value: what gets copied is unaffected by how it is displayed.
+  Vertical-only scrolling; no horizontal scrollbar needed any more.
 */
 .dialog__text {
   width: 100%;
@@ -1320,8 +1328,9 @@ h1:focus:not(:focus-visible) {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: var(--leading-snug);
-  white-space: pre;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
   overflow-y: auto;
   resize: none;
 }
@@ -1469,9 +1478,16 @@ h1:focus:not(:focus-visible) {
   margin-top: var(--space-4);
 }
 
+/*
+  B8 — a native checkbox's own box is what UX22 measures (`getBoundingClientRect`
+  on the `<input>` itself), and browsers do not grow that box for author
+  `padding` on a replaced form control the way they do for ordinary elements.
+  `--tap-min` is applied directly to `width`/`height`, matching the AppBar's
+  `Start over` and every other control that meets the 44×44 minimum.
+*/
 .adjust__checkbox {
-  width: 20px;
-  height: 20px;
+  width: var(--tap-min);
+  height: var(--tap-min);
   accent-color: var(--color-accent);
 }
 

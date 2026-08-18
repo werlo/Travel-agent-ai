@@ -38,7 +38,10 @@ async function planFor(vibe: string, trip: Trip = {}): Promise<User> {
   await user.click(screen.getByRole('button', { name: 'Continue' }))
   await screen.findByText(/^Question 1 of \d$/)
   await user.click(screen.getByRole('button', { name: 'Plan my trip now' }))
-  await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+  await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
   return user
 }
 
@@ -217,7 +220,10 @@ describe('the adjust panel (R12)', () => {
     document.body.innerHTML = ''
     render(<App />)
 
-    await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+    await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
     expect(text('.plan-hero__id')).toBe(adjusted.id)
     expect(amount('total')).toBe(adjusted.total)
   })

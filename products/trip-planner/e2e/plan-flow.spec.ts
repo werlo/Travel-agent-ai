@@ -109,7 +109,7 @@ test.describe('S3 — the adaptive questions', () => {
     await expect(
       page.getByRole('heading', {
         level: 1,
-        name: 'How long a flight are you willing to sit through?',
+        name: 'Happy with a long-haul flight, or keep it short?',
       }),
     ).toBeVisible()
     await expect(page.getByRole('button', { name: /Happy with long-haul/ })).toBeVisible()

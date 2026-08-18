@@ -52,7 +52,10 @@ async function planFor(vibe: string, answers: string[], trip: Trip = {}): Promis
   const skip = screen.queryByRole('button', { name: 'Plan my trip now' })
   if (skip !== null) await user.click(skip)
 
-  await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+  await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
   return user
 }
 
@@ -126,7 +129,10 @@ describe('a hand-picked plan survives an edit (R11, R12)', () => {
     document.body.innerHTML = ''
     render(<App />)
 
-    await screen.findByText(/· catalogue 2026-08-01$/, undefined, { timeout: 4000 })
+    await waitFor(
+    () => expect(document.querySelector('.plan-hero__id')?.textContent ?? '').toMatch(/· catalogue 2026-08-01$/),
+    { timeout: 4000 },
+  )
     expect(text('.plan-hero__title')).toBe(saverDestination)
     expect(text('.plan-hero__id')).toBe(handPicked.id)
     expect(text('.plan-hero__total')).toBe(handPicked.total)

@@ -20,7 +20,7 @@ import { Icon } from '../components/Icon'
 import { RelaxBanner } from '../components/RelaxBanner'
 import { WhyThisTrip } from '../components/WhyThisTrip'
 import { CLIPBOARD_FAILED_MESSAGE, ExportDialog } from './ExportDialog'
-import { defaultedLabel, planFacts, planIdLine } from '../format'
+import { defaultedLabel, planFacts } from '../format'
 
 /**
  * S5 — Plan (docs/03-design.md §4 S5; R7, R8, R9, R10, R11, R13, R14, R16).
@@ -207,7 +207,14 @@ export function PlanScreen({
         <p className="visually-hidden" role="status" aria-live="polite">
           {copied ? 'Copied' : ''}
         </p>
-        <p className="plan-hero__id">{planIdLine(plan, planSet.catalogueVersion)}</p>
+        <p className="plan-hero__id">
+          {/* B4 — each token is kept on one line so the wrap point can only ever
+              fall at the " · " between them, never mid-token (e.g. inside the
+              catalogue date). */}
+          <span className="plan-hero__id-token">{`Plan ${plan.planId}`}</span>
+          {' · '}
+          <span className="plan-hero__id-token">{`catalogue ${planSet.catalogueVersion}`}</span>
+        </p>
       </div>
 
       {/*

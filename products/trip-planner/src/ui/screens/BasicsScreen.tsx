@@ -108,6 +108,11 @@ export function BasicsScreen({
   // fixes things. It deliberately does NOT track blur: it sits above the <h1>, so
   // adding it mid-click would move the whole form out from under the pointer.
   const [summaryErrors, setSummaryErrors] = useState<BasicsErrors>({})
+  // UX6: once the summary has been shown (>=2 problems on submit), it stays on
+  // screen — counting down — until every problem is fixed, not just until the
+  // count drops below two. Otherwise a screen-reader user who clears one of two
+  // errors loses the running count and the role="alert" anchor (B1).
+  const [summaryVisible, setSummaryVisible] = useState(false)
   // Focus is moved after the render that shows the errors, not from inside the
   // submit handler: the browser puts focus on the button it was clicked with, and
   // a focus() call racing that is the classic way this silently stops working.
@@ -156,6 +161,7 @@ export function BasicsScreen({
         }
         setErrors(without)
         setSummaryErrors(without)
+        if (Object.keys(without(summaryErrors)).length === 0) setSummaryVisible(false)
       }
     }
   }
@@ -223,11 +229,19 @@ export function BasicsScreen({
     const problems = orderedErrors(result.errors)
 
     if (problems.length === 0 && result.basics !== null) {
+      setSummaryVisible(false)
       onSubmit(result.basics)
       return
     }
     const nonce = (focusRequest?.nonce ?? 0) + 1
     if (problems.length >= 2) {
+      setSummaryVisible(true)
+      setFocusRequest({ target: 'summary', nonce })
+      return
+    }
+    if (summaryVisible && problems.length === 1) {
+      // Resubmitting with the summary already up and one problem left: keep it,
+      // counted down to "1 thing to fix", rather than dropping to inline-only.
       setFocusRequest({ target: 'summary', nonce })
       return
     }
@@ -237,7 +251,7 @@ export function BasicsScreen({
 
   return (
     <div className="screen screen--form screen--narrow">
-      {summaryList.length >= 2 ? (
+      {summaryVisible && summaryList.length >= 1 ? (
         <div className="error-summary" role="alert" tabIndex={-1} ref={summaryRef}>
           <h2 className="error-summary__title">{errorSummaryHeading(summaryList.length)}</h2>
           <ul className="error-summary__list">

@@ -130,7 +130,11 @@ export function priceCandidate(
         'day',
         'days',
       )}, ${TAX_QUALIFIER}`,
-      seasonal: ctx.season.line,
+      // B10 — every other priced line ends with a tax qualifier; the seasonal
+      // loading is a percentage of rates that already include GST, so it carries
+      // no tax of its own. Say that explicitly rather than relying only on the
+      // footnote to cover the gap.
+      seasonal: `${ctx.season.line}, no separate tax — it loads rates that already include GST`,
       perPerson: `${formatRupees(partyTotal)} ÷ ${ctx.travellers}, rounded to the nearest ₹100`,
     },
   }

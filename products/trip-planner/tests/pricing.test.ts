@@ -235,8 +235,14 @@ describe('the price moves with the travel dates (R23)', () => {
     const offCost = priceCandidate(destination, stay, [], off)
 
     expect(peakCost.partyTotal).not.toBe(offCost.partyTotal)
-    expect(peakCost.basis.seasonal).toBe('Peak season (25 Dec – 2 Jan): +35% on stay and travel')
-    expect(offCost.basis.seasonal).toBe('Off season (Jul): −20% on stay and travel')
+    // B10 — the seasonal basis now also carries its own tax position, like every
+    // other priced line (R20).
+    expect(peakCost.basis.seasonal).toBe(
+      'Peak season (25 Dec – 2 Jan): +35% on stay and travel, no separate tax — it loads rates that already include GST',
+    )
+    expect(offCost.basis.seasonal).toBe(
+      'Off season (Jul): −20% on stay and travel, no separate tax — it loads rates that already include GST',
+    )
     expect(peakCost.seasonal).toBeGreaterThan(0)
     expect(offCost.seasonal).toBeLessThan(0)
     expect(
