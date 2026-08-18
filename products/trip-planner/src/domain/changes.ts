@@ -36,14 +36,25 @@ function stayClause(previous: Plan, next: Plan): string {
  * answer on purpose: "International" answered with Manali is named here, in the
  * same notice, rather than left to a banner they may have scrolled past.
  */
-function overriddenAnswerClause(planSet: PlanSet, plan: Plan): string | null {
-  const relaxation = planSet.relaxation
-  if (relaxation == null) return null
-  const label = relaxation.restore.label
-  if (label === '') return null
-  // `delta` is budget - total, so this is the budget the user actually typed.
+function overriddenAnswerClauses(plan: Plan): string[] {
+  // The engine already knows which answers it could not hold — R10 puts one
+  // reason per answer on the plan, and `held` is false for the ones it dropped.
+  // Reading it here means the notice covers the relaxation ladder AND the
+  // exhausted-ladder case, which is the one that handed a judge Manali after he
+  // asked for international and said nothing at all.
   const budget = plan.cost.partyTotal + plan.budget.delta
-  return `you asked for ${label} — nothing fits ${formatRupees(budget)} for ${plan.travellers}, so this is ${plan.destinationName}`
+  // Mid-sentence, so only the first letter is lowered: 'Within India' has to stay
+  // 'within India' rather than become 'within india'.
+  const midSentence = (label: string): string =>
+    label.charAt(0).toLowerCase() + label.slice(1)
+  return plan.why.reasons
+    .filter((reason) => !reason.held)
+    .map(
+      (reason) =>
+        `you asked for ${midSentence(reason.quotes)} — nothing fits ${formatRupees(
+          budget,
+        )} for ${plan.travellers}, so this is ${plan.destinationName}`,
+    )
 }
 
 export interface ChangeNoticeInput {
@@ -57,7 +68,7 @@ export interface ChangeNoticeInput {
  * One sentence, or null when nothing worth saying changed. Rendered adjacent to the
  * total on S5 (docs/03-design.md §4 S5).
  */
-export function changeNotice({ previous, next, planSet }: ChangeNoticeInput): string | null {
+export function changeNotice({ previous, next }: ChangeNoticeInput): string | null {
   const clauses: string[] = []
   let budgetDriven = false
 
@@ -79,9 +90,9 @@ export function changeNotice({ previous, next, planSet }: ChangeNoticeInput): st
     }
   }
 
-  const overridden = overriddenAnswerClause(planSet, next)
-  if (overridden !== null) {
-    clauses.push(overridden)
+  const overridden = overriddenAnswerClauses(next)
+  if (overridden.length > 0) {
+    clauses.push(...overridden)
     budgetDriven = true
   }
 

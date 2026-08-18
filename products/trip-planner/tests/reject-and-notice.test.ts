@@ -164,7 +164,9 @@ describe('saying what changed (R19)', () => {
       CATALOGUE,
     ) as PlanSet
 
-    expect(impossible.relaxation).not.toBeNull()
+    // The ladder exhausts here rather than relaxing one rung, which is exactly
+    // how the override went unmentioned before: there was no banner to carry it.
+    expect(impossible.recommended.region).toBe('domestic')
     const notice = changeNotice({
       previous: null,
       next: impossible.recommended,

@@ -398,6 +398,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       answers: {},
       selectedVariant: 'recommended',
       planSet: corrupt as unknown as PlanSet,
+      excluded: [],
     })
 
     const restored = readSession(CATALOGUE.meta.version).session

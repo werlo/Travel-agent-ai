@@ -229,7 +229,9 @@ export function buildLegs(
 ): [TravelLeg, TravelLeg] {
   const fare = destination.fares[ctx.origin]
   const perLeg = Math.round(fare.perPerson / 2)
-  const base = destination.bases[0]?.name ?? destination.name
+  // The leg names the destination, not the base town: you fly to Goa and drive to
+  // Anjuna, and the header already says which town the plan books.
+  const arrival = destination.name
   return [
     {
       kind: 'outbound',
@@ -238,7 +240,7 @@ export function buildLegs(
       perPerson: perLeg,
       date: ctx.startDate,
       from: ctx.origin,
-      to: base,
+      to: arrival,
     },
     {
       kind: 'return',
@@ -246,7 +248,7 @@ export function buildLegs(
       hours: fare.hours,
       perPerson: fare.perPerson - perLeg,
       date: ctx.endDate,
-      from: base,
+      from: arrival,
       to: ctx.origin,
     },
   ]

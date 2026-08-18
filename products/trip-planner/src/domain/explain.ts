@@ -71,26 +71,49 @@ function droppedText(label: string, ctx: PlanContext): string {
   return `You said ${label} — nothing in this catalogue held that for ${formatRupees(ctx.budget)}, so it counted for less than your other answers.`
 }
 
+/** The honest case: we could not hold this answer, so `held` is false (R19). */
+function dropped(label: string, ctx: PlanContext): Reason {
+  return { quotes: label, text: droppedText(label, ctx), held: false }
+}
+
 function vibeReason(ctx: PlanContext, destination: Destination): Reason {
   const label = VIBE_LABELS[ctx.vibe]
   return {
     quotes: label,
     text: `You chose ${label} — ${destination.name} rates ${destination.vibeAffinity[ctx.vibe]} out of 5 for that in this catalogue.`,
+    held: true,
   }
 }
 
 function budgetReason(ctx: PlanContext, total: Rupees): Reason {
   const delta = ctx.budget - total
   const head = `Your budget is ${formatRupees(ctx.budget)} for ${nightsLabel(ctx.nights)}`
-  if (delta > 0) return { quotes: formatRupees(ctx.budget), text: `${head} — this lands ${formatRupees(delta)} under it.` }
-  if (delta < 0) return { quotes: formatRupees(ctx.budget), text: `${head} — this lands ${formatRupees(-delta)} over it.` }
-  return { quotes: formatRupees(ctx.budget), text: `${head} — this lands exactly on it.` }
+  if (delta > 0)
+    return {
+      quotes: formatRupees(ctx.budget),
+      text: `${head} — this lands ${formatRupees(delta)} under it.`,
+      held: true,
+    }
+  if (delta < 0)
+    return {
+      quotes: formatRupees(ctx.budget),
+      text: `${head} — this lands ${formatRupees(-delta)} over it.`,
+      // The budget position has its own badge on the headline; `held` is about
+      // the adaptive answers the plan could not honour (R19).
+      held: true,
+    }
+  return {
+    quotes: formatRupees(ctx.budget),
+    text: `${head} — this lands exactly on it.`,
+    held: true,
+  }
 }
 
 function datesReason(ctx: PlanContext, destination: Destination): Reason {
   return {
     quotes: nightsLabel(ctx.nights),
     text: `You have ${nightsLabel(ctx.nights)}, ${formatDateRange(ctx.startDate, ctx.endDate)} — ${destination.name} works for anything from ${destination.minNights} to ${destination.maxNights} nights.`,
+    held: true,
   }
 }
 
@@ -128,9 +151,10 @@ function adaptiveReasons(input: ExplainInput): Reason[] {
         out.push({
           quotes: option.label,
           text: `You said ${option.label} — ${chosen.destination.name} is one of ${count} ${count === 1 ? 'destination' : 'destinations'} in this catalogue that answer that.`,
+          held: true,
         })
       } else {
-        out.push({ quotes: option.label, text: droppedText(option.label, ctx) })
+        out.push(dropped(option.label, ctx))
       }
       continue
     }
@@ -142,6 +166,7 @@ function adaptiveReasons(input: ExplainInput): Reason[] {
       out.push({
         quotes: option.label,
         text: `You said ${option.label} — ${chosen.destination.name} is tagged ${joinWords(onDestination)}.`,
+        held: true,
       })
       continue
     }
@@ -151,13 +176,14 @@ function adaptiveReasons(input: ExplainInput): Reason[] {
       out.push({
         quotes: option.label,
         text: `You said ${option.label} — ${chosen.stay.name} is the ${joinWords(onStay)} choice in ${chosen.destination.name}.`,
+        held: true,
       })
       continue
     }
 
     // The honest case: we could not hold this answer, so we say so rather than
     // inventing a match. This is the same fact the R14 banner reports.
-    out.push({ quotes: option.label, text: droppedText(option.label, ctx) })
+    out.push(dropped(option.label, ctx))
   }
 
   return out

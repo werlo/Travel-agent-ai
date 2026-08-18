@@ -394,6 +394,12 @@ export interface Reason {
   text: string
   /** The user's own answer label, so the UI can prove the quote is theirs. */
   quotes: string
+  /**
+   * R19 — false when this plan could NOT honour the answer it quotes. That is the
+   * fact the change notice names on the headline instead of leaving it three
+   * scrolls down (customer fix 3).
+   */
+  held: boolean
 }
 
 /** R10 — a named runner-up. `line` MUST contain a numeral. */
