@@ -46,10 +46,20 @@ test.describe('R14 / UX18 — never dead-end', () => {
     const banner = page.locator('.plan-relax')
     await expect(banner).toBeVisible()
     const text = await banner.innerText()
-    expect(text.toLowerCase(), 'the banner must name the original constraint').toContain(
-      'international',
-    )
-    expect(text.toLowerCase(), 'the banner must name the substitute').toContain('within india')
+    // Round 3 (F1): R14 is amended so the constraint dropped is chosen by a
+    // search over the droppable set, not a fixed "drop most recent" order — for
+    // this exact answer set the ladder now finds that dropping Party (not
+    // International) is what unblocks the pool, and names that instead. Which
+    // constraint gets named is no longer asserted literally; what R14 actually
+    // requires is asserted: a "Put X back" control exists, naming whatever was
+    // dropped, and restoring it can never come out cheaper (the disproof the
+    // architecture review caught).
+    expect(
+      text.toLowerCase(),
+      'the banner must say something was widened/changed to make a plan possible',
+    ).toMatch(/widened the search|changed .* to make this work/)
+    const restoreButton = banner.getByRole('button', { name: /^Put .+ back$/ })
+    await expect(restoreButton).toBeVisible()
     expect(text).toMatch(/₹[\d,]+/)
 
     // The banner sits above the plan and cannot be dismissed.
@@ -74,11 +84,19 @@ test.describe('R14 / UX18 — never dead-end', () => {
     const banner = page.locator('.plan-relax')
     const before = await banner.innerText()
 
-    await banner.getByRole('button', { name: /^Put .+ back$/ }).click()
+    const restoreButton = banner.getByRole('button', { name: /^Put (.+) back$/ })
+    const restoreLabel = (await restoreButton.textContent()) ?? ''
+    const dropped = (restoreLabel.match(/^Put (.+) back$/) ?? [])[1] ?? ''
+    expect(dropped.length, 'the restore control must name what it puts back').toBeGreaterThan(0)
+
+    await restoreButton.click()
     await expect(banner).not.toHaveText(before)
     const after = await banner.innerText()
     expect(after, 'the restored sentence must state the resulting cost').toMatch(/₹[\d,]+/)
-    expect(after.toLowerCase()).toContain('international')
+    // Round 3 (F1): whichever constraint the search-based ladder actually
+    // dropped (see the test above), the heading names it back — the same word
+    // the "Put X back" control used, whatever that word is this run.
+    expect(after.toLowerCase()).toContain(dropped.toLowerCase())
 
     // Still no dismiss control, and the plan is still on screen.
     await expect(page.locator('.plan-hero__title')).toBeVisible()
@@ -346,7 +364,11 @@ test.describe('R17 / UX19 — export the itinerary as plain text', () => {
   test('R17: the exported text matches the plan currently on screen after switching variant', async ({
     page,
   }) => {
-    await planBySkipping(page, 'Mountains')
+    // Round 3 (F2): the R25 vibe-affinity floor removed Manali & Solang as a
+    // Saver candidate for Mountains-skip, so that answer set no longer has a
+    // Saver card (see R11+UX15 'single empty slot' below). Honeymoon-skip still
+    // clears the floor with both cards present, so it is used here instead.
+    await planBySkipping(page, 'Honeymoon')
     await page.locator('[data-alt="saver"]').getByRole('button', { name: 'Use this plan' }).click()
     const dest = await destination(page)
     await openExportFallbackDialog(page)

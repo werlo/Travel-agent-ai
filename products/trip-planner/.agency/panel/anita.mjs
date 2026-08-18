@@ -1,10 +1,9 @@
 import { chromium } from 'playwright'
-import { setup, answerAll, finish } from './anita_setup.mjs'
 const b = await chromium.launch()
-const p = await b.newPage({ viewport: { width: 1280, height: 560 } })
-await setup(p); await answerAll(p); await finish(p)
-await p.getByRole('button',{name:/Use this plan/i}).nth(1).click()
-await p.waitForTimeout(1200)
-await p.evaluate(()=>window.scrollTo(0,0)); await p.waitForTimeout(500)
-await p.screenshot({ path: '.agency/screenshots/anita-12-banner-top.png' })
+const p = await b.newPage({ viewport: { width: 1280, height: 900 } })
+p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE ERROR:', m.text()) })
+await p.goto(process.env.APP_URL)
+await p.waitForTimeout(1000)
+console.log(await p.locator('body').innerText())
+await p.screenshot({ path: '.agency/screenshots/01-landing.png', fullPage: true })
 await b.close()

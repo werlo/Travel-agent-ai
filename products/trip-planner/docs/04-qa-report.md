@@ -539,3 +539,503 @@ Changed (assertions superseded by the amended requirements, itemised above):
   `e2e/qa-03-plan.spec.ts`, `e2e/qa-04-alternatives-adjust.spec.ts`,
   `e2e/qa-05-trust-session.spec.ts`, `e2e/qa-06-sweeps.spec.ts`,
   `e2e/control-export.spec.ts`, `e2e/plan-flow.spec.ts`, `e2e/trust-layer.spec.ts`
+
+---
+---
+
+# QA Report — Compass (trip-planner) — Round 3
+
+**Author:** QA Engineer · **Round:** 3 (regression after fix rounds F1–F4, driven by
+the architecture review's NO-GO) · **Date:** 2026-08-18 · **Verdict: PASS**
+
+Zero open S1 or S2. `npm run e2e` exits **0** — every test in the suite passes,
+including the three round-1 S3 literals (B1, B2) and the round-2 S2s (B6, B7), which
+are now genuinely fixed rather than left failing on purpose. This is the first round
+this product has reached that state.
+
+Scope: the full regression suite re-run end to end, plus targeted verification of
+every item in `docs/01-prd.md` §11 (R7, R8, R11, R12, R14, R17, R21 amended; R25, R26
+added) against the running app, and of every drift/bug the Tech Lead's
+`docs/07-architecture-review.md` named (D1–D5, B1–B10). QA added **1 new spec file**
+(`qa-09-round3.spec.ts`, 8 tests) covering the requirements that only had unit-test
+coverage after F1–F4 (R25's vibe floor, R11/R12's hand-picked-plan persistence, and
+the architecture review's own 9-adult reproduction), added a small keyboard/
+double-submit/hostile-input sweep to `f3-exclusions.spec.ts` (3 tests) for the R26
+control that had none, and **updated 8 stale assertions** across 3 files whose literal
+wording the F1/F2 fixes legitimately superseded (all itemised in *Test-harness
+changes* below, each backed by evidence that the new behaviour is correct, not just
+different). **No product source was modified** — `git status` on `src/` is clean.
+
+---
+
+## Commands run
+
+Full chain, from `products/trip-planner`:
+
+```
+$ npm run lint && npm run build && npm test && npm run e2e
+```
+
+### `npm run lint` → PASS (exit 0)
+```
+> compass-trip-planner@0.1.0 lint
+> eslint . --max-warnings=0 && tsc --noEmit
+```
+No output. Clean at `--max-warnings=0`, including the new/changed spec files.
+
+### `npm run build` → PASS (exit 0)
+```
+> compass-trip-planner@0.1.0 build
+> tsc -b --noEmit false && vite build
+
+vite v5.4.21 building for production...
+✓ 80 modules transformed.
+dist/index.html                   1.11 kB │ gzip:  0.65 kB
+dist/assets/index-DKwkx5qT.css   23.82 kB │ gzip:  4.79 kB
+dist/assets/index-BY-ZI4hp.js   303.04 kB │ gzip: 89.18 kB
+✓ built in 0.95–1.02s
+```
+303.04 kB / 89.18 kB gzip — comfortably inside the 200 kB gzip budget the architecture
+review measured against.
+
+### `npm test` → PASS (exit 0)
+```
+> compass-trip-planner@0.1.0 test
+> vitest run
+
+ Test Files  27 passed (27)
+      Tests  499 passed (499)
+   Duration  ~26s
+```
+Round 2 was 25 files / 438 tests; F1–F4 added 2 files / 61 unit tests (including the
+exhaustive `restore.costDelta < 0` sweep across every vibe × region × budget ×
+traveller combination — the architecture review's own recommended guard). **No unit
+test that passed in round 2 fails now.**
+
+### `npm run e2e` → **217 passed, 0 failed (exit 0)**
+```
+> compass-trip-planner@0.1.0 e2e
+> playwright test --reporter=line --workers=4
+
+Running 217 tests using 4 workers
+...
+  217 passed (3.6m)
+```
+Round 2 ended at 194 passed / 8 failed. This round: **217 passed, 0 failed.** The
+eight round-2 failures — three round-1 S3s (B1, B2, and the counted-thrice B8) plus
+the two round-2 S2s (B6, B7) — are all now genuinely green, not skipped or softened.
+Full detail on how each was re-verified is in *Bugs* and the *round-2 → round-3
+regression* table below.
+
+---
+
+## Re-running the suite unmodified surfaced 8 new failures first — all resolved as stale literals, not regressions
+
+Before touching any spec, the pre-F1–F4 suite (208 tests, unchanged from round 2 plus
+`f3-exclusions.spec.ts` which F3 had already added) was run once against the fixed
+app. It reported **8 failures**, all new since round 2's list. Each was individually
+driven in the browser to determine whether it was a real regression or a stale
+assertion the fixes had legitimately superseded, before any spec was touched:
+
+| # | Failing assertion | Root cause, driven directly | Verdict |
+|---|---|---|---|
+| 1–2 | `qa-05:37,70` — R14 banner must contain "international" | F1's amended R14 chooses the constraint to drop **by search**, not a fixed order. For the PRD's own deadEnd example (Party + International, 2 nights, ₹25,000, 4), the search now finds dropping the **vibe floor** (R25, wired in by F2) is what unblocks the pool — confirmed via the `window.__compass.relaxedKeys` diagnostic handle: `['vibe', 'region']`. The literal constraint named is no longer "international"; the *requirement* — a named, undismissable, honestly-costed restore path — still holds. | **Stale literal.** Updated to assert the requirement generically (dynamic constraint name read off the "Put X back" button) rather than the specific word. |
+| 3–4 | `trust-layer:180,219` — same deadEnd scenario, same literal | Same root cause. `relaxedKeys` driven directly: `['vibe', 'region']`, one restore button, "Put party back". | **Stale literal.** Same fix, plus updated the `relaxedKeys` assertion to the driven value. |
+| 5–7 | `qa-04:76,135,176` — Mountains-skip must have a Saver card | F2's R25 vibe-affinity floor removed Manali & Solang (`vibeAffinity.beach/mountains` context — actually the Mountains-skip default lands on Manali, affinity fine for Mountains but the *Saver* candidate pool narrowed) as a qualifying Saver for that specific answer set; `[data-alt="saver"]` is legitimately absent and `[data-alt="saver-absent"]` renders the UX15 literal sentence instead — driven directly and confirmed correct per R11/UX15. | **Stale fixture.** Honeymoon-skip still clears the floor with both Saver and Stretch present (driven and confirmed); the three tests now use it instead of Mountains. |
+| 8 | `qa-05:346` — export text after switching to the Saver, same Mountains-skip fixture | Same root cause as 5–7 (no Saver card to click). | **Stale fixture.** Same fix. |
+
+None of the eight was a defect in the running app. Every substitution is recorded in
+*Test-harness changes* below with the evidence that justified it, per the same
+audit discipline round 2 established.
+
+---
+
+## Verification against `docs/07-architecture-review.md` (the NO-GO)
+
+The Tech Lead's review named a NO-GO on three S2 correctness defects (relaxation
+banner, itinerary supply, vibe floor) plus D4/D5 (hand-picked plans not surviving
+edits/reload) and a punch list of S3/S4 items (B1, B2, B4, B5, B8, B9, B10). F1–F4
+claim to have fixed all of it. Each claim was independently re-driven through the
+running UI, not read off the commit message:
+
+| Review finding | Fix claimed | QA re-verification | Result |
+|---|---|---|---|
+| **Bottleneck §2** — the relaxation banner asserts a universal it never tested; false on the 9-adult city-nightlife-party case (10/42 candidates fit). | F1: guard + search-based ladder. | Reproduced the exact answer set (Party / Within India / A city / A proper city night / Local stays / 13–16 Nov 2026 / 9 adults / ₹4,50,000 / from Delhi) end to end in the browser — `e2e/qa-09-round3.spec.ts` (new). The banner never renders the string "no city nightlife party trip fits", and the recommended total is within budget × 1.25. Additionally: `tests/planner.test.ts`'s new exhaustive sweep (`restore.costDelta < 0` never true) covers every vibe × region × budget × traveller combination in the catalogue, not just this one answer set. | **Confirmed fixed.** |
+| **Bottleneck §1 / D3** — `blank days = trip days − 6` on 12 of 42 (destination × stay) pairs from 6 nights up; the free-day control is a no-op on thin bases. | F1: re-based C3 to `eligibleExperiences(d,s) >= maxNights+1` for all 42 pairs (cap thin bases rather than pad); split the free-day sentence from a supply-shortfall sentence; R21 now drops experiences (never repacks). | `tests/catalogue.test.ts`'s re-based C3 passes for **all 42 pairs** (confirmed by reading the test, which fails loudly and by name per pair if any one doesn't clear the floor — none do). Driven directly: Beach 20/12/2026–27/12/2026 with the free-day box unchecked — the exact case the review measured at "2 blank days, 1 honestly labelled" — now shows all 8 days with ≥1 experience (`qa-07-refine1.spec.ts:420`, passing). The reference Beach plan (10/10–15/10, ₹60,000, 2) with the free-day box ticked now drops the total by the freed day's cost (`qa-07:385`, passing; was B6). | **Confirmed fixed.** |
+| **D1** — no vibe-affinity floor; a 1/5 destination can be recommended silently. | F2: `ConstraintSpec` for the floor (`vibeAffinity[vibe] >= 3`), wired into `specs`, applied to the recommendation, both alternatives and every reroll. | New coverage (`qa-09-round3.spec.ts`): recommendation and both alt cards for Beach-skip are never one of the 4 below-floor destinations (Manali & Solang, Gangtok & Pelling, Bangkok & Ayutthaya, Kathmandu & Pokhara — read off `vibeAffinity.beach` in the catalogue source, all < 3); rerolling exhausts the 4 floor-clearing Beach destinations and the 5th/6th reroll does surface Manali/Gangtok — but only ever **with the R14 banner visible and naming "beach"**, never silently. This is exactly what R25's own Given/When/Then requires for the exhausted case, not a miss. | **Confirmed fixed**, and the "never silent" clause (the actual regression-sensitive part of Manali/Gangtok) is what's asserted, not "never shown at all" (which the PRD's own text doesn't require and the 4-destination catalogue can't support past 4 rerolls). |
+| **D4** — `forceConstraints`/pinned destination exists nowhere in persisted state; a Saver/reject selection reverts on the next adjust or is unreproducible after a reload. | F2: `pinnedDestinationId` added to session state, `PlanInput` and the plan-ID hash; validated against the persisted plan set on read. | New coverage: selecting the Saver on a Honeymoon-skip plan survives a traveller-count adjust (destination unchanged) and survives a full page reload with the **same plan ID** (`qa-09-round3.spec.ts`). A post-reroll (R22) pick survives a subsequent budget adjust without reverting to the originally-rejected destination. | **Confirmed fixed.** |
+| **D5** — `applyRestore` leaves a stale `changeNotice`; a notice can name a destination that isn't in the `<h1>`. | F2: `changeNotice: null` set on every plan-replacing reducer case. | Driven: after selecting the Saver and applying a traveller change, no change notice on screen names a destination other than the current `<h1>` (`qa-09-round3.spec.ts`). | **Confirmed fixed.** |
+| B1 — error summary vanishes instead of counting "1 thing to fix". | F4. | `qa-01:223` re-run: passes. Driven manually — correcting one of two errors now shows `1 thing to fix before we can plan`, not a disappeared summary. | **Confirmed fixed.** |
+| B2 — heading after "International" doesn't say "long-haul". | F4 (copy change, Tech Lead's own call in the review: "long-haul is fine"). | `qa-02:25` re-run: passes. Heading now contains "long-haul". | **Confirmed fixed.** |
+| B4 — plan-ID line breaks mid-token at 360px. | F4. | Driven at 360×800: `.plan-hero__id` no longer wraps inside the `2026-08-01` token (`overflow-wrap`/`word-break` now present, checked by reading the rendered box — the date renders on one line). Covered by the existing `qa-06` 360px sweep, which passes with no horizontal scroll and no visual overlap on the plan hero at 360px. | **Confirmed fixed.** |
+| B5 — export textarea clips lines with no wrap. | F4. | Driven at 360px: the export textarea (fallback dialog, clipboard removed) wraps its lines; `scrollWidth` no longer exceeds `clientWidth`. Covered by `qa-06`'s reflow sweep, which walks the export dialog at 360px and passes. | **Confirmed fixed.** |
+| B8 — free-day checkbox is 20×20 at every width. | F4. | `qa-06:157` (44×44 sweep) re-run at 360/768/1280: passes — `.adjust__checkbox` now measures ≥44×44 at all three widths. | **Confirmed fixed.** |
+| B9 — seasonal saving renders `₹-9,640` instead of `−₹9,640`. | F4. | Driven: Beach 05/07/2027–12/07/2027, the Season row now reads `−₹9,640` with the sign outside the symbol, matching its own basis line. Covered by `qa-07:558`/`qa-helpers.rupees()`, which parses both forms and both pass. | **Confirmed fixed.** |
+| B10 — Season row has no tax qualifier. | F4 (documented — the review itself said this is S4/prose-covered, not a defect). | Unchanged; still S4 and still covered by the footnote per round 2's finding. Not re-filed. | **Accepted as documented, not a regression.** |
+| B3 — travellers 2→4 at ₹60,000 switches destination, so Travel isn't fare×2. | F4: "document B3" (per the commit message) — this is the A19 precedence rule (R9 wins over R8's literal), not a code fix. | `qa-03:153` (A19-aware assertion, unchanged from round 2) passes: the property holds when the destination is kept, and the transition case is exempted per A19, which round 2's QA report already recorded. | **Confirmed as intentionally-not-a-bug**, consistent with round 2. No regression. |
+
+**Every S2 the architecture review flagged (relaxation honesty, itinerary supply, the
+vibe floor, plus D4/D5's state-coherence bugs) is confirmed fixed by direct UI
+verification, not by reading the fix commits' own claims.**
+
+---
+
+## Requirement coverage — the amended/added set (docs/01-prd.md §11)
+
+| ID | Amendment/addition | E2E spec | Result | Evidence |
+|---|---|---|---|---|
+| R14 | Banner may only assert what was tested; never negative `restore.costDelta`; drop set chosen by search. | `qa-09-round3.spec.ts` (9-adult reproduction, new), `qa-05:37,70` and `trust-layer:180,219` (updated), `tests/planner.test.ts` (exhaustive unit sweep) | **PASS** | 9-adult case never shows the disproved banner text; recommended total ≤ budget×1.25. Deep-dive deadEnd case: banner honestly names whatever the search actually dropped (driven, not hardcoded), restore control never quotes a cheaper total. Unit sweep: `restore.costDelta < 0` false across every vibe/region/budget/traveller combination tested (a `sawARelaxation` sanity assertion guards against the sweep silently never triggering). |
+| R7 | 42-pair supply invariant (`eligibleExperiences >= maxNights+1`); no blank day unless the user's own free-day choice put it there. | `tests/catalogue.test.ts` (all 42 pairs, unit), `qa-07:420` (Beach 20/12–27/12, e2e) | **PASS** | All 42 (destination×stay) pairs clear the invariant (thin bases capped rather than padded). Beach 20/12/2026–27/12/2026 (8 days) with the free-day box unchecked: every day names ≥1 experience — the exact case the architecture review measured at 2 blank days. |
+| R8 | Fare-doubling holds only when the re-plan keeps the same destination; R9 wins the conflict, R19 names the switch instead. | `qa-03:105,125,134,153` (unchanged from round 2, A19-aware) | **PASS** | Sum/per-person exact on every plan tested; Travel rises by fare×2 exactly when destination is kept (₹200,000 budget case); the ₹60,000 reference case, which forces a destination switch, is exempted per A19 and the switch is what R19's change notice names instead — verified, not asserted away. |
+| R11 | A hand-picked plan (Saver/Stretch/reject result) is never silently reverted by a later adjust or reload. | `qa-09-round3.spec.ts` (new) | **PASS** | Saver selection on Honeymoon-skip survives a traveller-count adjust (destination unchanged) and a full reload (same plan ID). A post-reroll pick survives a subsequent budget adjust without reverting. |
+| R12 | Adjust-panel state (forced choice) travels in the same session snapshot; change notice and `<h1>` are never inconsistent. | `qa-09-round3.spec.ts` (new) | **PASS** | After selecting the Saver and applying a traveller change, no change notice on screen names a destination other than the current `<h1>`. |
+| R17 | One-click copy; dialog is the fallback only. Regression-guarded, no new work. | `qa-05:299–364` (unchanged), `control-export.spec.ts` | **PASS** | `navigator.clipboard.readText()` returns the itinerary in one click; `Copied` announced; no dialog on the happy path. Stayed green through this entire round with zero changes to these assertions. |
+| R21 | Free-day sentence only for a user-requested free day; supply-shortfall gets a distinct sentence; the total always strictly drops (never repacks). | `qa-07:385,399,420` (unchanged) | **PASS** | Reference Beach plan: ticking the free-day box drops the total by the freed day's cost (was B6, now fixed). No experience name repeats across any of 12 plans (3 vibes × 4 lengths). No day is blank on a plan nobody asked a free day of, across 5 answer sets including the two supply-poor cases the architecture review named. |
+| R25 (new) | Vibe-affinity floor (≥3/5) on the recommendation, both alternatives, and every reroll; the floor itself is what the ladder drops when nothing clears it, named by vibe. | `qa-09-round3.spec.ts` (new) | **PASS** | Recommendation and both alt cards for Beach-skip are never a below-floor destination. Reroll 5×: the 4 floor-clearing Beach destinations get exhausted and a below-floor destination does appear on rerolls 5–6, but always with the R14 banner visible, naming "beach" — never silently, which is what R25's Given/When/Then actually requires for the exhausted case (see the false-positive discussion above). A dedicated small-budget/Party case confirms the banner-names-vibe path directly. |
+| R26 (new) | "Anywhere except…" on Trip basics; feeds the same excluded set as R22's post-plan reject; multi-entry, per-entry undo, survives reload. | `f3-exclusions.spec.ts` (existing 4 + 3 new sweep tests) | **PASS** | Excluding Goa before any plan means no plan/alternative/reroll shows Goa for the rest of the session (3 rerolls checked); a second entry (Varkala) and per-entry undo both work; survives a reload landing back on the basics screen with the exclusion intact and still feeding the eventual plan. New this round: keyboard-operable (Tab + Enter), double-click-safe (exactly one exclusion from a double-click), and hostile input (empty submit, HTML payload never reaches the DOM, an 80-character unicode string doesn't crash the screen). |
+
+**9 / 9 amended/added requirements PASS.**
+
+---
+
+## Round-1/round-2 requirement regression
+
+Every R1–R24 and UX1–UX24 spec from rounds 1–2 was re-run. **No requirement that
+passed before regressed** — the round-2 report's own R7 regression (blank days) is
+now reversed back to PASS by F1, and every other row is unchanged:
+
+| Area | Round 2 | Round 3 | Note |
+|---|---|---|---|
+| R1–R6 | PASS | PASS | Unchanged. |
+| R7 | **FAIL** (B7 — blank days) | **PASS** | Fixed by F1; see architecture-review table above. |
+| R8, R9 | PASS | PASS | A19 precedence unchanged and re-verified. |
+| R10 | PASS | PASS | |
+| R11 | PASS | PASS, **strengthened** | Now covers hand-picked persistence through adjust and reload (R11 amendment), not just the switch itself. |
+| R12 | PASS | PASS, **strengthened** | Now covers change-notice/`<h1>` consistency after a hand-picked plan. |
+| R13 | PASS | PASS | |
+| R14 | PASS (on the literal it had) | PASS (on the honesty invariant it should have had) | The literal wording round 1/2 asserted is now known to be sometimes wrong per-scenario (search-based drop); the invariant that actually matters — never a false "nothing fits" claim — is what round 3 verifies, exhaustively at the unit level and by direct reproduction of the architecture review's own failing case at the e2e level. |
+| R15 | PASS | PASS | |
+| R16 | PASS | PASS | |
+| R17 | PASS | PASS | Zero changes to these assertions all round; stayed green. |
+| R18–R20, R22–R24 | PASS | PASS | |
+| R21 | **FAIL** (B6 — free day costs nothing) | **PASS** | Fixed by F1. |
+| UX1–UX21, UX23, UX24 | PASS | PASS | |
+| UX6 | FAIL (B1) | **PASS** | Fixed by F4. |
+| UX8 | FAIL (B2) | **PASS** | Fixed by F4. |
+| UX22 | FAIL (B8) | **PASS** | Fixed by F4. |
+
+---
+
+## Cross-cutting sweeps
+
+Re-run in full (`qa-06-sweeps.spec.ts`, `qa-08-refine1-sweeps.spec.ts`), plus a new
+small sweep on the R26 control (`f3-exclusions.spec.ts`, 3 new tests) — the one
+primary surface added since round 2 that had no keyboard/double-submit/hostile-input
+coverage of its own.
+
+| Sweep | Result | Notes |
+|---|---|---|
+| Responsive 360 / 768 / 1280 | PASS | Full `qa-06` reflow suite unchanged and green, including the plan-hero at 360px (B4's fix — no more mid-token wrap) and the export textarea (B5's fix — wraps instead of clipping). No horizontal scroll on any screen at any width, including post-reroll and post-exclusion states. |
+| Keyboard only | PASS | Primary flow end to end with no mouse (`qa-06:262`). New: "Anywhere except…" is reachable by Tab, submits on Enter or via the focused Exclude button (`f3-exclusions.spec.ts`, new); "Not this one — somewhere else" operable by keyboard (`qa-08:121`, unchanged). Every control ≥44×44 at all three widths, including the now-fixed free-day checkbox (B8). |
+| Console errors & warnings | PASS | Zero `console.error`/`pageerror`/React warnings across the full flow, the trust layer (`trust-layer.spec.ts:254`, re-run), and the vibe screen (`vibe-screen.spec.ts:147`). No new console output from any F1–F4 surface. |
+| Reload mid-flow | PASS | Existing sweeps unchanged and green; new this round: a hand-picked Saver plan survives a full reload with the *same* plan ID (R11 amendment, `qa-09-round3.spec.ts`), and an R26 exclusion survives a reload from the basics screen (`f3-exclusions.spec.ts`). |
+| Hostile input | PASS | Existing sweeps unchanged and green; new: the R26 field rejects an empty submit without a phantom exclusion, never renders a pasted `<img onerror>` payload as markup, and doesn't crash on an 80-character unicode string (`f3-exclusions.spec.ts`, new). |
+| Double-submit | PASS | Existing sweeps unchanged and green; new: double-clicking "Exclude" adds exactly one exclusion, not two (`f3-exclusions.spec.ts`, new). |
+| Offline | PASS | `qa-06:398`, unchanged. |
+| Reduced motion | PASS | `qa-06:334`, unchanged. |
+
+---
+
+## Bugs
+
+Zero open S1 or S2. All ten round-2 bugs (B1–B10) are now closed, confirmed by direct
+re-verification rather than by trusting the fix commits. No new bug was found this
+round.
+
+| ID | Sev | Title | Status this round |
+|---|---|---|---|
+| B1 | S3 | Error summary didn't count down to "1 thing to fix" | **Closed.** `qa-01:223` passes with no assertion change. |
+| B2 | S3 | Heading after "International" didn't say "long-haul" | **Closed.** `qa-02:25` passes with no assertion change; copy was changed per the Tech Lead's own recommendation. |
+| B3 | S3 | Travellers 2→4 at ₹60,000 switches destination (A19) | **Not a bug — documented.** Unchanged from round 2's finding; `qa-03:153` continues to assert the A19-aware property and passes. |
+| B4 | S4 | Plan-ID line broke mid-token at 360px | **Closed.** Driven at 360px; no wrap inside the date token. Covered by `qa-06`'s reflow sweep. |
+| B5 | S4 | Export textarea clipped lines with no wrap | **Closed.** Driven at 360px; textarea now wraps. Covered by `qa-06`'s reflow sweep. |
+| B6 | S2 | "Leave one day free" cost nothing on a thin-supply plan | **Closed.** `qa-07:385` passes: the reference Beach plan's total now strictly drops. |
+| B7 | S2 | Plans printed unrequested blank days | **Closed.** `qa-07:420` passes: Beach 20/12–27/12/2026 has ≥1 experience on all 8 days. |
+| B8 | S3 | Free-day checkbox was 20×20 | **Closed.** `qa-06:157` passes at all three widths. |
+| B9 | S4 | Seasonal saving rendered `₹-9,640` | **Closed.** Sign now renders outside the symbol; `qa-helpers.rupees()`/`qa-07:558` pass. |
+| B10 | S4 | Season row had no tax qualifier | **Accepted as documented** (round 2's own finding: covered by the footnote, S4, not gate-blocking). Unchanged. |
+
+**Open S1: 0. Open S2: 0. Open S3: 1 (B3, documented as intentional). Open S4: 1 (B10, documented as intentional).**
+
+---
+
+## Test-harness changes
+
+Eight assertions were updated because F1 (search-based relaxation ladder) and F2 (the
+R25 vibe floor) legitimately changed which constraint gets dropped and which
+destinations qualify as alternatives for specific answer sets that predate those
+requirements. Every change is a *generalisation* — asserting the requirement's
+substance instead of a literal that assumed the old fixed-order/no-floor behaviour —
+never a loosening of what's checked. Each is backed by evidence driven directly in the
+browser before the spec was touched (see the table above).
+
+| Spec | Old assertion | Superseded by | New assertion |
+|---|---|---|---|
+| `qa-05-trust-session.spec.ts:37` | Banner text contains `international` / `within india` | R14 (search-based drop order) | Generic: banner says something was widened/changed; a `Put X back` control is present, `X` read dynamically |
+| `qa-05-trust-session.spec.ts:80` | Restored banner text contains `international` | R14 | Restored banner text contains whatever `X` the restore control named, read dynamically |
+| `trust-layer.spec.ts:180` | Banner literal `"No international party trip fits…"`; `relaxedKeys` = `['region']`; button `Put international back` | R14 + R25 | Banner contains `we widened the search`; `relaxedKeys` = `['vibe', 'region']` (driven and confirmed); button/heading read dynamically as `Put X back` / `With X back in` |
+| `trust-layer.spec.ts:238` | Button `Put international back` | R14 | `Put .+ back` (dynamic) |
+| `qa-04-alternatives-adjust.spec.ts:76,135,176` | `planBySkipping(page, 'Mountains')` (assumed a Saver always exists) | R25 (vibe floor narrows the Saver pool) | `planBySkipping(page, 'Honeymoon')` — driven and confirmed to clear the floor with both Saver and Stretch present |
+| `qa-05-trust-session.spec.ts:346` | Same Mountains-skip fixture | R25 | Same Honeymoon-skip fixture |
+
+No product source file was modified. `git status` on `src/` is clean — confirmed
+directly, not asserted from memory.
+
+---
+
+## Untested / not covered
+
+Unchanged from round 2, plus one new item:
+
+| Item | Why |
+|---|---|
+| Real screen-reader output, real OS clipboard buffer, WCAG contrast ratios, dark colour scheme, 320px/200% zoom, Firefox/WebKit, the numeric performance budget | Unchanged from rounds 1–2, for the same reasons recorded there. |
+| Season windows other than December peak / July off-season | Unchanged from round 2. |
+| Child ages 0 and 1 | Unchanged from round 2. |
+| The full 42-pair R7 invariant, driven through the UI for every pair | Verified exhaustively at the **unit** level (`tests/catalogue.test.ts`, all 42 pairs) and spot-checked through the UI for the two pairs the architecture review specifically measured (Kochi & Varkala's Christmas window, Beach 20/12–27/12). Driving all 42 pairs through the browser would be redundant with the unit sweep and was not done. |
+| `relaxedKeys` and other `window.__compass` diagnostics as a *product* guarantee | This is a documented, deliberately read-only debug handle (`docs/02-architecture.md` §9), not a user-facing contract; QA used it only to drive investigation of the 8 stale-literal failures, and the actual pass/fail assertions in the suite are all on visible UI text, not this handle — with one narrow exception (`trust-layer.spec.ts:200`, which was already reading it before this round and is retained for continuity). |
+
+---
+
+## Verdict
+
+**PASS.** Zero open S1, zero open S2. `npm run lint`, `npm run build`, `npm test` and
+`npm run e2e` all exit 0 — this is the first round this product has cleared the house
+stack's own definition of runnable with a fully green E2E run, no failures left in on
+purpose. All ten round-2 bugs (B1–B10) are closed or explicitly documented as
+intentional (B3, B10), confirmed by direct re-verification rather than by trusting the
+fix commits. Every S2 the architecture review's NO-GO named (the false relaxation
+banner, the itinerary supply cliff, the missing vibe floor, and the two state-
+coherence bugs D4/D5) was independently reproduced-then-fixed-then-reproduced-clean,
+not taken on the Tech Lead's word. All 9 amended/added requirements from
+`docs/01-prd.md` §11 pass against the running UI, with new dedicated coverage for the
+three that had none (R25, R11/R12's persistence clause, and the architecture review's
+own 9-adult fixture).
+
+Nothing is open at hand-off.
+
+### Files QA added or changed this round
+
+Added:
+- `products/trip-planner/e2e/qa-09-round3.spec.ts` — R14 (architecture-review
+  reproduction), R25, R11/R12 hand-picked persistence (8 tests)
+
+Changed:
+- `e2e/qa-helpers.ts` — added `altCardOf()` (exported version of the local
+  `altCard` helper several specs already had, needed by the new file)
+- `e2e/f3-exclusions.spec.ts` — added 3 sweep tests (keyboard, double-submit,
+  hostile input) for the R26 control
+- `e2e/qa-04-alternatives-adjust.spec.ts`, `e2e/qa-05-trust-session.spec.ts`,
+  `e2e/trust-layer.spec.ts` — 8 stale assertions generalised per *Test-harness
+  changes* above, each backed by driven evidence
+
+No file under `src/` was modified.
+
+---
+---
+
+# QA Report — Compass (trip-planner) — Round 4
+
+**Author:** QA Engineer · **Round:** 4 (regression after the round-3
+customer-feedback triage) · **Date:** 2026-08-18 · **Verdict: PASS**
+
+Zero open S1 or S2. This round verifies the five fixes shipped against the
+`docs/05-customer-feedback.md` "Ranked fixes — refinement round 3" table: R27
+(reroll routed through the R14 claim-honesty check), R28 (exclusion covers every
+named variant), R29 (sticky one-line results summary), R30 (indicative flight
+departure/arrival times) and R31 (internal-consistency of auto-generated reasoning
+sentences). All five are verified against the running app at
+`http://localhost:4079` against the literal "fixed means" wording supplied for this
+round, not against the commit message's own claim.
+
+QA added **one new spec file**, `e2e/qa-10-round4.spec.ts` (9 tests, one per
+"fixed means" clause plus one extra edge case each for R27 and R28). **No existing
+spec required a stale-assertion change this round** — the round-3 suite (217
+tests) is unmodified and re-ran green with zero touches. **No product source was
+modified** — `git status` on `src/` is clean, confirmed directly below.
+
+---
+
+## Commands run
+
+Full chain, from `products/trip-planner`:
+
+```
+$ npm run lint && npm run build && npm test && npm run e2e
+```
+
+### `npm run lint` → PASS (exit 0)
+```
+> compass-trip-planner@0.1.0 lint
+> eslint . --max-warnings=0 && tsc --noEmit
+```
+No output. Clean at `--max-warnings=0`, including the new spec file. (One lint
+error was found and fixed during authoring — an unused `total` binding in the new
+spec's R29 test — before this final run; see *Notes on writing this round's
+specs* below.)
+
+### `npm run build` → PASS (exit 0)
+```
+> compass-trip-planner@0.1.0 build
+> tsc -b --noEmit false && vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 80 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   1.11 kB │ gzip:  0.64 kB
+dist/assets/index-C3sJ4dAE.css   24.13 kB │ gzip:  4.83 kB
+dist/assets/index-C5xXzCCL.js   305.55 kB │ gzip: 90.03 kB
+✓ built in 0.93–0.97s
+```
+Round 3 was 303.04 kB / 89.18 kB gzip; this round's five fixes add ~2.5 kB / ~0.85
+kB gzip. Comfortably inside the 200 kB gzip budget the architecture review
+measured against.
+
+### `npm test` → PASS (exit 0)
+```
+> compass-trip-planner@0.1.0 test
+> vitest run
+
+ Test Files  27 passed (27)
+      Tests  511 passed (511)
+   Duration  ~26s
+```
+Round 3 was 27 files / 499 tests; the developer added 12 unit tests inside the
+existing files for R27–R31 (no new unit test file). **No unit test that passed in
+round 3 fails now.**
+
+### `npm run e2e` → **226 passed, 0 failed (exit 0)**
+```
+> compass-trip-planner@0.1.0 e2e
+> playwright test --reporter=line --workers=4
+
+Running 226 tests using 4 workers
+...
+  226 passed (5.0m)
+```
+Round 3 ended at 217 passed / 0 failed. This round: **226 passed, 0 failed** — the
+217 round-3 tests, entirely unmodified, plus the 9 new round-4 tests. Nothing that
+passed before regressed.
+
+---
+
+## Verification of the five round-3 fixes
+
+Each row quotes the *fixed means* wording supplied for this round and states what
+was actually driven through the UI.
+
+| # | Fix | Req | Spec | Result | Evidence |
+|---|---|---|---|---|---|
+| 1 | Route "Not this one — somewhere else" through the same claim-honesty check as R14, and never omit a plan shown moments earlier when a preference is silently dropped | R27 | `qa-10:28,80` | **PASS** | Peace & Quiet / Within India / The hills / Quiet, but some life / Resort comfort, 20–27 Dec 2026, ₹2,50,000, 4, from Mumbai → **Manali & Solang, ₹2,10,230, ₹39,770 under budget** (within India, under budget, exactly the scenario named). Clicking "Not this one — somewhere else" moves to a different destination and the banner reads `We changed one thing to make this work / You asked for within India — nothing else within India peace & quiet fits ₹2,50,000 for 4, so we looked outside India too.` — it never asserts a blanket "no within India trip fits" claim, and it names the dropped preference by name. Manali & Solang appears in "You turned these down" with a working `Put Manali & Solang back`, which restores it exactly. A second test at a deliberately tiny budget (₹30,000) confirms the turned-down plan is always listed in the comparison, whatever gets dropped. |
+| 2 | Confirm an exclusion covers every named variant of a destination, not just one chip | R28 | `qa-10:106,146` | **PASS** | Typing "Goa" into "Anywhere except…" on Trip basics and clicking Exclude renders exactly the chip `Goa (covers North Goa & South Goa)`. Neither "North Goa" nor "South Goa" appears in the recommendation, either alternative card, or across three consecutive rerolls in the same session. Where a reroll happens to turn down North Goa itself, the "You turned these down" list on the plan screen shows the identical `Goa (covers North Goa & South Goa)` chip — the same display name function is reused on both screens, verified by reading the text, not the source. |
+| 3 | Add a sticky, skimmable one-line summary at the top of the results page, reused as the opening line of "Why this trip" | R29 | `qa-10:178` | **PASS** | On load, `.plan-summary-line` reads `<destination> · ₹<total> · <budget position>`, e.g. `Kochi & Varkala · ₹56,600 · ₹3,400 under budget`. After scrolling 3000px down the page, the line's bounding box is still fully inside the 800px-tall viewport (`position: sticky` inside the same sticky header as the AppBar) — not merely present in the DOM. The identical string is the first child inside `[aria-label="Why this trip"]`, ahead of the "Because you said" reasons list, confirmed by DOM order, not just text presence. |
+| 4 | Show an indicative departure/arrival time window on every flight leg, not just duration | R30 | `qa-10:223,245,266` | **PASS** | Both the outbound and return `Fly …` lines on the itinerary read `Fly Bengaluru → Kochi & Varkala, departs 09:20, arrives 10:38` (`HH:MM` on both ends); the R16 provenance line (`indicative`, `2026-08-01`, non-dismissable) remains on the same screen, so the invented-looking clock time is not presented as a live fact. The clipboard export ("Copy as text") carries the identical `departs …, arrives …` phrasing on every flight line. A four-vibe sweep (Beach, Mountains, Party, Culture & Food) confirms no flight leg's departure time ever falls inside 00:00–05:00 — true by construction, since the fixed sample-time table the engine draws from (`06:15`–`21:30`) contains no time in that window, and this is what the sweep actually exercises rather than asserting. |
+| 5 | Fix internal-consistency slips in auto-generated reasoning sentences (e.g. calling North Goa "a city") | R31 | `qa-10:284` | **PASS** | Reproduced Kabir's exact repro: Party / Within India / A city / A proper city night / Resort comfort, 9→7 travellers, Delhi, ₹4,50,000, 13–16 Nov 2026. Hand-picking North Goa via its alternatives card ("Use this plan") and then adjusting Adults to 7 keeps North Goa on screen, and the "A city" reason in "Why this trip" now reads `You said A city — North Goa is the plan you picked yourself, and it does not answer that.` — the string `North Goa is a city` (or any `<destination> is/rates as a city` pattern) appears nowhere on the page. This is a fixture-based regression test, not a one-off manual check: it drives the exact answer set and hand-pick sequence the customer-feedback repro described. |
+
+**5 / 5 round-3 fixes verified.**
+
+---
+
+## Round 1–3 requirement regression
+
+Every spec from rounds 1–3 (217 E2E tests across 9 files, plus all 511 unit tests)
+was re-run unmodified. **No requirement that passed before regressed** — the full
+`npm run e2e` run is 226/226 green, and none of the 217 pre-existing tests needed
+a single assertion change this round (contrast rounds 2 and 3, where fixes changed
+enough wording that stale literals had to be generalised). All ten round-2 bugs
+(B1–B10) remain closed or documented as intentional (B3, B10), unchanged from
+round 3.
+
+---
+
+## Cross-cutting sweeps
+
+Re-run in full (`qa-06-sweeps.spec.ts`, `qa-08-refine1-sweeps.spec.ts`,
+`f3-exclusions.spec.ts`'s sweep tests) — all pass unmodified. The five new
+surfaces this round (the reroll-honesty banner text, the "Goa (covers …)" chip,
+the sticky summary line, the flight departs/arrives text, and the pinned-override
+reasoning sentence) were additionally checked directly rather than only through
+the dedicated `qa-10` spec:
+
+| Sweep | Result | Notes |
+|---|---|---|
+| Responsive 360 / 768 / 1280 | PASS | The sticky summary line and the widened "Why this trip" opening sentence were visually checked at all three widths via the existing `qa-06`/`qa-08` reflow sweeps, which re-ran green — no new horizontal scroll or overlap introduced by the added `<p>` elements. |
+| Keyboard only | PASS | The full primary flow (`qa-06:262`) re-ran unmodified and green; the reroll button and the "Anywhere except…" field were already covered by `qa-08`'s keyboard sweep and continue to pass with the new banner/chip text swapped in underneath. |
+| Console errors & warnings | PASS | `qa-06:425`, `qa-08:134`, `trust-layer:254` all re-ran with zero `console.error`/`pageerror`/React warnings, including through the new `qa-10` flows (reroll, exclude, scroll, hand-pick, adjust). |
+| Reload mid-flow | PASS | Unchanged sweeps re-ran green. Not additionally targeted at the five new surfaces specifically (see *Untested* below). |
+| Hostile input | PASS | Unchanged sweeps re-ran green; the "Anywhere except…" field's existing hostile-input coverage (`f3-exclusions.spec.ts`) is unaffected by the R28 display-name change, since the change is purely a rendering transform on an already-resolved catalogue id. |
+| Double-submit | PASS | Unchanged sweeps re-ran green. Not additionally targeted at the reroll or exclude buttons beyond what `qa-08` already covers. |
+| Offline | PASS | `qa-06:398`, unchanged. |
+| Reduced motion | PASS | `qa-06:334`, unchanged. |
+
+---
+
+## Bugs
+
+None found this round. Zero open S1 or S2, unchanged from round 3.
+
+| ID | Sev | Title | Status |
+|---|---|---|---|
+| B3 | S3 | Travellers 2→4 at ₹60,000 switches destination (A19) | Unchanged — documented, not a bug (round 2/3 finding stands). |
+| B10 | S4 | Season row has no tax qualifier | Unchanged — accepted as documented (round 2/3 finding stands). |
+
+**Open S1: 0. Open S2: 0. Open S3: 1 (B3, documented). Open S4: 1 (B10, documented).**
+
+---
+
+## Notes on writing this round's specs
+
+- The first draft of `qa-10-round4.spec.ts` used `planFor(page, 'Beach', [])` to
+  reach a plan with no answers given, which silently skipped the questionnaire
+  step entirely (the loop over an empty answers array never clicks anything) and
+  left the test waiting on a plan that was never generated. Replaced with
+  `planBySkipping()`, the helper actually built for that path, in all four call
+  sites. Caught before this final run, not left as a red herring.
+- One unused local (`total`, captured from `planTotal()` but never asserted on in
+  the R29 sticky-summary test — the summary line's own numeral is checked via
+  regex instead) tripped `--max-warnings=0`. Removed rather than suppressed.
+
+---
+
+## Untested / not covered
+
+| Item | Why |
+|---|---|
+| Reload mid-flow, specifically after a reroll (R27) or exclusion (R28) | The existing reload sweeps (`qa-06`, `qa-08`) cover reload after the surfaces that existed before this round; a reload immediately after a reroll-driven relaxation banner, or with the R28 chip on screen, was not separately driven. R11/R12's persistence guarantees (round 3) should cover this by construction — `excluded` and `pinnedDestinationId` are both in the same session snapshot — but it was not independently re-verified for these two specific new banners this round. |
+| Double-submit on the reroll and exclude controls, specifically with the new banner/chip text | Covered generically by round-3's double-submit sweeps against the underlying actions (reject, exclude), not re-driven against the new text this round. |
+| Everything carried over as UNTESTED from rounds 1–3 (real screen-reader output, real OS clipboard buffer, WCAG contrast ratios, dark colour scheme, 320px/200% zoom, Firefox/WebKit, the numeric performance budget, season windows other than Dec/Jul, child ages 0–1, the full 42-pair R7 invariant driven through the UI) | Unchanged from round 3, for the same reasons recorded there. |
+
+---
+
+## Verdict
+
+**PASS.** Zero open S1, zero open S2. `npm run lint`, `npm run build`, `npm test`
+and `npm run e2e` all exit 0 — 511 unit tests and 226 E2E tests, all green. All
+five fixes named in this round's brief (R27–R31) are independently verified
+against the running UI, driven exactly against the "fixed means" wording supplied,
+not inferred from the commit message. No requirement that passed in rounds 1–3
+regressed — the pre-existing 217 E2E tests needed zero changes this round. No file
+under `src/` was modified.
+
+Nothing is open at hand-off.
+
+### Files QA added or changed this round
+
+Added:
+- `products/trip-planner/e2e/qa-10-round4.spec.ts` — R27, R28, R29, R30, R31 (9 tests)
+
+Changed: none.
+
+No file under `src/` was modified.

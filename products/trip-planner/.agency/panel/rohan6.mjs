@@ -1,25 +1,28 @@
 import { chromium } from 'playwright'
 const b = await chromium.launch()
 const p = await b.newPage({ viewport: { width: 1280, height: 800 } })
-p.on('console', m => { if (m.type() === 'error') console.log('CONSOLE ERROR:', m.text()) })
 await p.goto('http://localhost:4079')
 await p.waitForTimeout(500)
 await p.getByText('Beach', { exact: true }).click()
 await p.waitForTimeout(300)
 await p.getByRole('button', { name: 'Continue' }).click()
 await p.waitForTimeout(800)
-
-// set dates
 const startInput = p.locator('input').nth(0)
 await startInput.fill('10/10/2026')
 const endInput = p.locator('input').nth(1)
 await endInput.fill('15/10/2026')
-
-// exclude Goa
 await p.locator('input[placeholder="e.g. Goa"]').fill('Goa')
 await p.getByRole('button', { name: 'Exclude' }).click()
 await p.waitForTimeout(300)
-
-console.log(await p.locator('body').innerText())
-await p.screenshot({ path: '.agency/screenshots/03-filled-basics.png', fullPage: true })
+await p.getByRole('button', { name: 'Continue' }).click()
+await p.waitForTimeout(800)
+await p.getByRole('button', { name: 'Plan my trip now' }).click()
+await p.waitForTimeout(1200)
+// Try reroll
+await p.getByRole('button', { name: 'Not this one — somewhere else' }).click()
+await p.waitForTimeout(1200)
+console.log(await p.locator('h1,h2').allInnerTexts())
+const bodyText = await p.locator('body').innerText()
+console.log(bodyText.slice(0, 800))
+await p.screenshot({ path: '.agency/screenshots/06-reroll.png', fullPage: true })
 await b.close()

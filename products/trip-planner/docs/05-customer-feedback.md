@@ -865,3 +865,191 @@ banner, which is the exact work I came here to stop doing.
 **Would I pay?** ₹1,000 one-off per trip, or ~₹2,500/year for the studio. Not more
 while it's a sample catalogue that doesn't book anything, and not at all until the
 budget lines stop contradicting themselves.
+
+## Rohan Mehta
+
+**Persona:** 29, product designer in Bengaluru, planning during a gap between meetings. Came in with: Oct 10-15 (flexible to 16th), 2 people, ~₹60k all-in, from Bengaluru, wants a beach but explicitly not Goa (did that last year). Wants a destination and a number in five minutes, no patience for a long questionnaire.
+
+**Did I reach my goal?** Yes. Landing to a costed, day-by-day plan took about 5 real clicks (Beach card → Continue → fill 2 dates → Exclude → Continue → "Plan my trip now") plus typing dates/exclusion — well inside my six-click patience budget, and comfortably inside five minutes.
+
+**Step by step:**
+1. Landing page asks "What kind of trip do you want?" with six vibe cards (Mountains, Beach, Party, Honeymoon, Peace & Quiet, Culture & Food). Clicked Beach immediately — no hesitation, this is exactly the kind of first question I want.
+2. Next screen, "Your trip basics" — and it had *already* pre-filled 2 travellers, ₹60,000 budget, and Bengaluru as the departure city as sensible defaults. I only had to fix the dates (typed 10/10/2026 and 15/10/2026) and type "Goa" into the exclude field, which resolved to "North Goa" and added a visible chip confirming the exclusion. This step felt fast and respectful of my time — it didn't make me re-enter things it could guess.
+3. Hit Continue, got a 4-question guided flow ("Within India, or international?" etc.) with a clearly visible "Plan my trip now" skip button and the reassuring line "You can stop answering at any point — we'll fill in the rest." I skipped straight through by clicking "Plan my trip now" on question 1.
+4. Got a full result immediately: **Kochi & Varkala, ₹56,600 total (₹28,300pp), ₹3,400 under budget**, with a day-by-day itinerary (flights, hotel check-in/out, named activities with prices and short descriptive blurbs), a cost breakdown by category (travel/stay/experiences/local allowance), a "Why this trip" section explicitly stating it respected my budget and dates, and — critically — a "Considered and rejected" list showing Andaman/Phuket/Bali were priced but over budget. It also showed "Other ways to do this" (Saver at ₹43,400, Stretch at ₹58,400) and a "Somewhere else" reroll button, plus a confirmation strip "You turned these down: North Goa" with an undo link.
+5. Tested the reroll ("Not this one — somewhere else") out of curiosity about the Goa-exclusion failure mode I was warned about — it instantly swapped to Puducherry & Auroville, ₹43,400, still under budget, still not Goa, with a clear diff line explaining what changed (destination and hotel). No re-asking of the four questions, no full reload.
+
+**Where I hesitated:** Only briefly on the trip-basics screen, wondering whether typing "Goa" would catch "South Goa" too since it auto-resolved to "North Goa" specifically — I didn't test South Goa exclusion separately, but the visible chip gave me enough confidence to move on. Everything else was immediately legible.
+
+**Verbatim reactions:**
+- "Oh nice, it already guessed my budget and party size — didn't expect that."
+- "The exclude-Goa thing actually turned into a chip I can see, not just a text field that might get ignored. Good."
+- "Wait, it shows me what it *didn't* pick and why (Andaman, Phuket, Bali — all over budget) — that's the kind of receipt that makes me trust the number."
+- "Reroll actually rerolled instantly and told me what changed. That's the exact 'give me a different one, fast' button I wanted."
+- "This is basically what I'd screenshot and paste into the group chat."
+
+**Blockers:** None. I got a destination and a number well within my five-minute/six-click budget, the Goa exclusion was honored and visibly confirmed, and getting a second option was one click with no re-interrogation.
+
+**Would I use it again / pay?** Yes, I'd use this again for the next trip. I wouldn't pay a subscription for it, but I'd use a free tool like this over manually cross-checking Skyscanner/MakeMyTrip/Google every time — it saves the exact 20-30 minutes of tab-juggling I hate. If it hooked into actual booking (it explicitly says it doesn't sell/reserve anything), I could see paying a small referral-style convenience fee, but not for the planning step alone.
+
+**Top three fixes (priority order):**
+1. Let me confirm exclusions cover both halves of a split destination (e.g. does excluding "Goa" catch South Goa too, not just the one chip I saw) — the ambiguity is small but it's exactly the kind of thing that would make me distrust the exclude feature on a second use.
+2. The itinerary result page is dense (breakdown, why-this-trip, alternatives, reroll, adjust panel all stacked) — a sticky "here's your answer" summary card up top would help since I'm skimming on a laptop with Slack open, not reading linearly.
+3. Nothing else blocking — this is close to ship-ready for my use case.
+
+## Anita Fernandes
+
+**Who I am:** 47, chartered accountant, Mumbai. Burned before by a package that quoted ₹1.2L and landed at ₹2.1L after taxes and a "peak season supplement." I do not trust travel numbers until I've checked the arithmetic myself.
+
+**What I brought:** Dec 20–27 (Christmas week), 4 people (2 adults, kids 9 and 12), budget ₹2.5L (stretch to ₹3L), flying from Mumbai, wants peaceful — not a party town, no 3am flights.
+
+### What happened
+
+1. Landing page ("What kind of trip do you want?") was clean and I understood it immediately — picked "Peace & Quiet." Good first impression, no clutter.
+2. The trip-basics form pre-filled with someone else's answers (Bengaluru, 5 nights, ₹60,000) and told me plainly to change what's wrong. I changed dates to 20–27 Dec, budget to 250000, adults to 2, children to 2 — and it correctly asked for each child's age (9, 12), and the summary bar updated live to "4 travellers (2 adults, 2 children)." I appreciated that the note up front told me a 12-year-old prices as an adult — no surprise later.
+3. Four quick vibe questions (India/international, hills/beach, how empty, resort/local stays). I answered honestly: Within India, The hills, Quiet but some life, Resort comfort. Nice touch that it says "you can stop at any point."
+4. Got a full plan: **Manali & Solang, ₹2,02,098 total, ₹47,902 under budget**, with a full day-by-day itinerary and a genuinely itemised cost breakdown on the right: Travel ₹59,250, Stay ₹54,600, Experiences ₹19,600, Local allowance ₹28,800, Season loading (+35% peak, disclosed as GST-inclusive already) ₹39,848 — and I added it up myself. **It matched, to the rupee.** That is the single most important thing this tool did right and most travel sites fail at.
+5. I reloaded the page to test if the number would move (my explicit red line). **It didn't** — same ₹2,02,098, same itinerary. Good, that's the trust test passed.
+6. I clicked "Not this one — somewhere else" expecting a different in-budget hill town. Instead it silently dropped my "Within India" answer and gave me **Kathmandu & Pokhara** (international) with a banner reading: **"No within India peace & quiet trip fits ₹2,50,000 for 4 — we looked outside India too."**
+
+   This stopped me cold. I had just been looking at Manali & Solang — within India — at ₹2,02,098, **under budget**, two clicks earlier. The "considered and rejected" list under the new plan only shows Maldives/Bali/Dubai as over-budget rejects — it does not mention Manali at all, and does not explain why the India option that clearly fit my budget was no longer offered. Whatever the internal logic is (probably: no India option satisfies "quiet + resort comfort" *combined*, so it widened the net internationally instead of degrading those two answers again the way it did for Manali), the banner text does not say that. It says "no within India trip fits ₹2,50,000," full stop, right after showing me one that did.
+
+   This is exactly the kind of thing that makes me stop trusting a number. If the system will assert "nothing fits" while a fitting option sits one click behind me in history, I no longer believe any of its other claims either — including the one where it swears the flight price includes all taxes.
+
+### Other observations
+- No departure time is ever shown for the flights — just duration ("3h 24m in the air"). I explicitly did not want a 3am flight and this plan never told me the departure time, so I can't confirm or reject it on that basis.
+- The footer disclaimer ("Compass does not sell or reserve anything") is honest and I respect that — it never pretended I could book at this price, so no false urgency there.
+- The cost breakdown itself is the best part of this product: peak-season loading is called out as a separate line with its own percentage, not buried the way my ₹1.2L→₹2.1L package did to me. If this held together consistently I would trust it more than most agents I've used.
+
+### Where I stopped
+I did not go further after the "somewhere else" contradiction. I would have kept exploring the Saver (Ella, ₹1,86,166) and Stretch (Havelock & Neil, ₹2,70,855) alternates shown alongside Kathmandu, but the trust was already gone — I'd be re-checking every subsequent number by hand, which defeats the point of using the tool.
+
+### Verbatim reactions
+- "Okay, this actually adds up — ₹59,250 + ₹54,600 + ₹19,600 + ₹28,800 + ₹39,848, let me just... yes, ₹2,02,098. Fine, that's the first travel site that's ever passed my calculator test."
+- "I reloaded and it's still ₹2,02,098. Good."
+- "Wait — 'no within India trip fits ₹2,50,000'? I was JUST looking at one. What do you mean nothing fits?"
+- "If you're going to tell me something doesn't exist, don't show it to me thirty seconds earlier. Now I don't believe the Kathmandu number either."
+
+
+## Kabir Sandhu
+
+**Persona:** 34, runs a nine-person design studio in Delhi, organising the annual studio offsite for the third time. Needs one plan he can paste into Slack for nine people, long weekend, under ₹4.5L, and needs to be able to drop to seven travellers without redoing the questionnaire.
+
+**Goal met:** Yes.
+
+**What I did, in order:**
+1. Landed on the vibe picker. Tried clicking both "Party" and "Peace & Quiet" (my studio has both crowds) — it's single-select, second click just swapped the selection. Slight letdown since my trip genuinely has two moods, but the card UI made the single-select behaviour obvious immediately, so no confusion, just a shrug and I picked Party as the headline vibe.
+2. "Your trip basics" form was pre-filled with plausible defaults (Bengaluru, 2 travellers, ₹60,000) — I overwrote everything with my real numbers (13–16 Nov, ₹4,50,000, 9 adults, Delhi). The running summary bar at the top updated live and correctly ("3 nights · 9 travellers · from Delhi · ₹4,50,000") which was reassuring.
+3. Answered the 4 quick questions (within India, city, proper city night, resort comfort) — it auto-advanced after each click, no extra "next" clicks needed, which was fast.
+4. Got a result: it could NOT do a within-India party trip for 9 at ₹4.5L and said so plainly, then substituted Bangkok & Ayutthaya, explained exactly why (which of my answers it had to override and which it kept), gave a full day-by-day, and a transparent cost breakdown down to per-room-night stay pricing. This is far more explanation than I expected and I actually trusted the number because of it.
+5. Clicked "Put within India back" specifically hunting for the R14 self-disproving "no results" bug — it didn't disprove itself. It said plainly "Nothing in this catalogue is within India for 3 nights with 9 travellers — the plan below is the closest we have" and kept showing Bangkok. Consistent, not a flip-flop.
+6. Explicitly picked the "Saver" alternative (North Goa) via "Use this plan" — my hand-picked choice.
+7. Then used the "Adjust and re-plan" panel to drop headcount from 9 to 7 WITHOUT touching the vibe or the 4 questions. It re-priced instantly and — critically — stayed on North Goa, my hand-picked destination. It did not silently snap back to the engine's Bangkok pick. This was the exact scenario I came in dreading and it held up.
+8. Also tried bumping to 12 travellers to see what breaks: it went 8% over budget, labelled itself honestly as "Stretch — 8% over your budget" rather than lying about fitting, and downgraded the stay tier to try to close the gap. No false "fits" claim anywhere.
+9. Hit "Copy as text" and read the clipboard content directly — it's a clean, short, Slack-ready summary with day-by-day, total, per-person cost, and the plan reference code. Exactly what I'd paste into our studio channel.
+
+**Where I hesitated:** Only at the very start, wanting to pick two vibes and realizing I couldn't. Recovered in under 5 seconds because the UI state (checkmark on card) made it obvious what was selected.
+
+**Verbatim reactions:**
+- "Oh nice, it actually explains why it swapped my hotel tier instead of just quietly doing it."
+- "Wait, I picked North Goa myself and then changed headcount — did it just... keep my pick? It did. Good."
+- "The copy-as-text output is genuinely just what I'd paste into Slack, no cleanup needed."
+- "It's honest about going over budget instead of pretending 12 people fits — I respect that."
+
+**Blockers:** None of the four listed dealbreakers occurred — headcount change did not force a re-questionnaire, no self-disproving "no results" claim, no silent revert of my hand-picked destination, and copy-as-text worked cleanly.
+
+**Top three fixes (priority order):**
+1. Let me select more than one vibe (or acknowledge the tension) — I came in wanting Party AND Peace & Quiet for a mixed group and had to just pick one and hope the itinerary balances it. It didn't really try to (Bangkok skewed full-on party, no quiet block).
+2. On the vibe-swap explanation text, tidy up the "Considered and rejected" / "why this trip" copy — it's genuinely useful but dense; a shorter one-line "TL;DR" up top would help before the full breakdown.
+3. Minor: the "you asked for a city — nothing fits ₹4,50,000 for 7, so this is North Goa" line after I'd already manually picked North Goa reads a little confusingly (North Goa isn't a city), like leftover reasoning from a different candidate — worth a pass for internal consistency of the generated sentences.
+
+**Would use again:** Yes.
+**Would pay:** Yes, this replaces the two hours I currently spend spreadsheeting flight/hotel guesses for the studio offsite. I'd pay something like ₹500–1000 per planning session, or a modest monthly fee if I ran multiple trips a year.
+
+---
+
+## Ranked fixes *(PM triage — refinement round 3)*
+
+**Panel:** 3 judges · Rohan 9/10 (goal met), Anita 5/10 (goal partly met), Kabir 8/10 (goal met) ·
+1 blocker (Anita). Rounds 1–2's blockers are cleared — this round is about a new blocker
+Anita hit in the "Not this one — somewhere else" path, plus polish. Requirement IDs marked
+"(proposed)" are not yet in `docs/01-prd.md`; they need a short round-3 PRD addendum before
+build, in the same shape as §10/§11.
+
+| # | Fix | Cited by | Requirement | Fixed means (observable) | Score | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | **Make "Not this one — somewhere else" honest about what it just showed.** The reroll path renders its own relaxation banner without the R14/A19 check that a shown-fitting plan can never sit one click behind a "nothing fits" claim, and it drops a stated preference (Within India) without saying so or offering the option it just dropped back. Cause: R14's honesty rule was built for the initial-plan path and never wired into the reroll path, which is a second code path generating the same class of banner. | Anita (blocker — her whole reason for the 5/10) | R27 (proposed, extends R14) | From a rendered Manali & Solang plan (within India, ₹2,02,098, under budget), clicking "Not this one — somewhere else" never renders a banner claiming no within-India option fits the budget; where relaxing "Within India" is genuinely the closest fit, the banner names the preference it dropped ("You asked for Within India — nothing else within India fits, so we looked abroad") and the comparison list includes Manali & Solang with an undo, not just the over-budget international rejects. | (1×5)/2=2.5 | accepted |
+| 2 | **Confirm an exclusion covers every named variant, not just one chip.** Cause: the exclude control resolves "Goa" to a single catalogue entry ("North Goa") and shows one chip, giving no signal that South Goa is also covered. | Rohan (fix #1) | R28 (proposed, extends R26) | Typing "Goa" into the exclude control on Trip basics produces a chip reading "Goa (covers North Goa & South Goa)" or two separate chips, and no plan, alternative or reroll in the session ever shows either variant. | (1×2)/1=2.0 | accepted |
+| 3 | **Add a skimmable summary at the top of the results page.** Cause: the destination, total and the "why" all live below the fold in a dense, linearly-read stack, which is wrong for a page two different judges said they skim rather than read. | Rohan (fix #2), Kabir (fix #2 — his "TL;DR" ask is the same problem stated from inside "Why this trip") | R29 (proposed) | A single-line, sticky-on-scroll summary ("North Goa · ₹1,76,100 · ₹2,00,100 under budget") renders above the itinerary on load and stays visible while scrolling; the same line appears as the first sentence inside "Why this trip", ahead of the full reasoning list. | (2×2)/2=2.0 | accepted |
+| 4 | **Show an indicative departure/arrival time window on every flight leg, not just duration.** Cause: the sample catalogue models fares and durations but never a time of day, so "no 3am flight" — a stated hard constraint for a parent travelling with children — has no field to check against. This is catalogue data, same as the fares already labelled indicative; it does not require live inventory. | Anita (asked in round 2 and again in round 3) | R30 (proposed) | Every flight leg on the itinerary and in "Copy as text" shows a departure and arrival time (e.g. "Mumbai → Bagdogra, departs 09:20, arrives 11:35"), drawn from the same indicative sample catalogue and carrying the same R16 provenance line; no leg departs between 00:00–05:00 unless the plan explicitly warns of it. | (1×3)/2=1.5 | accepted |
+| 5 | **Fix internal-consistency slips in the auto-generated reasoning sentences.** Cause: the sentence templates in "Why this trip" and the relaxation banners pull a category label ("a city") from the wrong candidate when the user has hand-picked a different destination than the one the template was reasoning about. | Kabir (fix #3) | R31 (proposed, extends R19) | Regenerate the "Why this trip" and banner text for a hand-picked destination (e.g. North Goa selected after a "city" question) and assert no sentence describes that destination using another destination's category ("a city" never appears attached to North Goa); add this as a fixture-based regression test alongside R19's change-notice test. | (1×2)/2=1.0 | accepted |
+
+### Rejected, with reasons
+
+| Fix requested | Cited by | Rejected because |
+|---|---|---|
+| **Multi-select vibes / handle a mixed-mood group** ("Party and Peace & Quiet"). | Kabir (round 3, fix #1) | Unchanged from round 1's rejection: two vibes make the affinity score ambiguous (best-of vs. average), and single-select with R25's affinity floor is the decision on record in PRD A8. R21 ("leave one day free") already gives a mixed-mood group its quiet day inside a single Party vibe; if a re-run with R21 applied still doesn't describe Kabir's trip, that is new evidence for a future round, not a reversal here. |
+
+
+
+## Anita Fernandes — round 2
+
+**Goal:** One complete number for 4 people (2 adults, kids 9 & 12), Mumbai, Dec 20-27 (Christmas peak week), budget ₹2.5L (stretch ₹3L), peaceful/not a party place, no 3am flights, showing exactly what makes up the total.
+
+**Result: Partly met, then I stopped trusting it.** ~12 minutes.
+
+### What happened
+
+1. Landing screen ("What kind of trip do you want?") was clear. I picked **Peace & Quiet** — matches "absolutely not a party place."
+2. Trip basics form pre-filled with dummy data (Bengaluru, 5 nights, ₹60,000, 0 children) — I had to correct every field. Fine, expected. Dates (20/12–27/12/2026), budget ₹2,50,000, 2 adults, 2 children (ages 9 and 12), flying from Mumbai — all took cleanly. Nice touch: the header bar updates live ("7 nights · 4 travellers (2 adults, 2 children) · from Mumbai · ₹2,50,000") so I could see my inputs summarised before committing.
+3. There was a flash of a false validation error ("Enter each child's age between 0 and 17") while I still had focus in the second age field with valid values (9, 12) already typed — it cleared once I clicked away. Momentary, but if a real user saw that lingering they'd assume the form was broken.
+4. Four quick vibe questions (India vs international, hills vs beach, how empty, resort vs homestay) — I answered India, hills, quiet-but-some-life, resort comfort. Good, short, skippable — I liked this part.
+5. Got a full result: **Manali & Solang, ₹2,02,098 total, ₹47,902 under budget.** This is genuinely the best part of the product:
+   - Full day-by-day itinerary with times, prices, and one-line descriptions for every activity.
+   - Flights explicit: Mumbai→Manali 06:15–09:39, return 09:20–12:44 — no 3am departure, exactly what I asked for.
+   - A full cost breakdown by category (Travel ₹59,250 / Stay ₹54,600 / Experiences ₹19,600 / Local allowance ₹28,800 / Season loading +35% = ₹39,848), with the per-unit rates shown (₹15,800/adult flight, ₹3,900/room-night, etc.), and it adds up correctly to the penny. This is exactly "show me exactly what makes up that number" — first time I've seen a planner actually do this instead of a black-box total.
+   - "Considered and rejected" list with amounts (Maldives, Bali, Dubai, all over budget) and a "Why this trip" section tying the pick back to my answers.
+   - Persistent disclaimer that prices are indicative catalogue data and nothing is booked — good, it never pretends I can pay here.
+6. **Reload test passed** — refreshed the browser, the total stayed exactly ₹2,02,098, itinerary identical. This was my single biggest red line from last time and it held.
+7. Then I hit two real problems:
+   - The "changed to keep you inside budget" banner said, twice: *"you asked for quiet, but some life — nothing fits ₹2,50,000 for 4, so this is Manali & Solang"* and the same for resort comfort — sitting directly above a green "₹47,902 under your budget" line. Read literally, "nothing fits ₹2,50,000" next to a plan that costs ₹47,902 less than that is a contradiction. I know now (because I know the domain) that it probably means "nothing satisfying that specific preference combo fits," but a first-time user reads "nothing fits your budget" and then sees the plan is well under budget — that's the exact thing that would make me question every other number on the page.
+   - I clicked "Not this one — somewhere else," which is captioned *"Keep the dates, the budget, the party and every answer — we will find the next best place."* It did not keep every answer — it silently dropped "Within India" and rerolled to **Kathmandu & Pokhara, Nepal**, without me asking to go international. It did disclose this in a banner with an undo ("Put within India back"), which is better than nothing, but the button's own caption promising "every answer" is simply false.
+   - Worse: I clicked "Put within India back" to undo it, and got a banner reading **"Nothing in this catalogue is within India for 7 nights with 4 travellers — the plan below is the closest we have."** That is flatly false — Manali & Solang, the exact plan I'd been looking at minutes earlier, is within India, is 7 nights, is 4 travellers, and its own "Put Manali & Solang back" link was sitting on that very same page. This is precisely the failure mode I said would make me close the tab: a false "nothing fits" claim sitting right next to proof it's wrong, in the same screen.
+8. I did click "Put Manali & Solang back" out of curiosity and it correctly restored the ₹2,02,098 India plan with all figures intact — so there is a working escape hatch, but I'd already stopped trusting the copy around it.
+
+### Verbatim reactions
+
+- "Okay, this is actually itemised properly — GST included, per-room-night, per-adult-fare, it adds up. I haven't seen that before."
+- "Wait — it says 'nothing fits ₹2,50,000' right next to a plan that's ₹48,000 under budget. That doesn't make sense."
+- "It just took me to Nepal? I said 'Within India.' It didn't ask, it just did it."
+- "It's telling me nothing in India fits for 4 people over 7 nights — but I was just looking at a Manali plan for exactly that, five seconds ago, and it's sitting right there on the same page under 'you turned this down.' That's just wrong. If it can't get that straight I don't know what else on this page is wrong."
+
+### Where I hesitated
+
+- On the "Somewhere else" reroll screen, reading the contradictory "nothing fits X within budget" banners twice before deciding whether to trust the total at all.
+- After the false "nothing is within India" claim, I re-read the whole page looking for what else might be inconsistent, which is not something I should have to do.
+
+### Blockers
+
+- The false "Nothing in this catalogue is within India for 7 nights with 4 travellers" claim, directly contradicted by content on the same page. This is the specific dealbreaker I said upfront would end the session.
+- "Somewhere else" / reroll copy promises to keep every answer and then doesn't, without asking first.
+
+### Scores
+
+- Clarity: 6 — the core plan screen is genuinely well laid out and legible; the reroll/adjustment flow undermines it with contradictory banners.
+- Task success: 6 — I got a real, itemised number for the exact trip I asked for, and it survived a reload. But the product then handed me a false claim about the same data on the next screen, which poisons trust in the number I already had.
+- Speed: 8 — fast, few clicks, four skippable questions, no dead time beyond a short "planning" spinner.
+- Visual: 7 — clean, readable, good use of a right-rail summary; nothing fancy but nothing broken either.
+- Trust: 3 — the core price math is transparent and reload-stable, which matters, but a provably false banner claim on the very next screen is disqualifying for someone who was burned by hidden numbers before.
+
+### Top three fixes (priority order)
+
+1. Never let a "why this changed" or "nothing fits" banner assert something the rest of the same page contradicts — if a valid in-budget, in-constraint plan exists (and clearly does, since it's linked right below), don't tell the user it doesn't exist.
+2. Make "keep every answer" buttons actually keep every answer, or don't claim to — if a reroll needs to relax a constraint (like Within India), ask before doing it, not after.
+3. Fix the transient false validation error on the children's age fields (flashes "must be 0–17" while valid values are already entered).
+
+### Would I use again / pay
+
+Would I use again: with the false "nothing fits" claims present, no — not until fixed. The underlying pricing engine is actually good enough that I'd come back once those two bugs are gone.
+
+Would I pay: For the itemised, reload-stable breakdown alone, yes — I'd pay something like ₹200–500 for a one-off detailed trip costing tool, the way I'd pay for a good calculator. Not more until the contradictory banners are gone; right now I don't trust the "why" text enough to recommend it to family.

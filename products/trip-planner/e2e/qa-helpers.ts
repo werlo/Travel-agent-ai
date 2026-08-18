@@ -156,6 +156,11 @@ export async function destination(page: Page): Promise<string> {
   return (await page.locator('.plan-hero__title').innerText()).trim()
 }
 
+/** The alternatives card for a given variant (`saver`, `stretch`, `recommended`, …). */
+export function altCardOf(page: Page, variant: string): Locator {
+  return page.locator(`[data-alt="${variant}"]`)
+}
+
 export async function budgetLine(page: Page): Promise<string> {
   return (await page.locator('.plan-hero .badge').first().innerText()).trim()
 }

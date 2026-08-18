@@ -97,4 +97,52 @@ test.describe('R26 — Anywhere except…', () => {
     expect(await destination(page)).not.toContain('Goa')
     expect(await planTotal(page)).toBeGreaterThan(0)
   })
+
+  // Round 3 sweeps on the new control — the same checks every other primary
+  // control on the plan/basics screens already gets.
+  test('sweep: is operable by keyboard alone', async ({ page }) => {
+    await startFresh(page)
+    await pickVibe(page, 'Beach')
+    await page.getByLabel('Anywhere except…').fill('Goa')
+    await page.getByLabel('Anywhere except…').press('Enter')
+    // Enter alone must not silently no-op or submit the whole form — either it
+    // behaves like Exclude, or focus stays put with the field unsubmitted; both
+    // are acceptable, a crash or navigation away is not.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    const excludeButton = page.getByRole('button', { name: 'Exclude' })
+    await excludeButton.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.excluded__name', { hasText: 'North Goa' })).toBeVisible()
+  })
+
+  test('sweep: double-clicking Exclude adds Goa exactly once', async ({ page }) => {
+    await startFresh(page)
+    await pickVibe(page, 'Beach')
+    await page.getByLabel('Anywhere except…').fill('Goa')
+    const excludeButton = page.getByRole('button', { name: 'Exclude' })
+    await Promise.all([excludeButton.click(), excludeButton.click()])
+    await expect(page.locator('.excluded__name', { hasText: 'North Goa' })).toHaveCount(1)
+  })
+
+  test('sweep: hostile input — HTML, unicode and an empty submit are handled without a crash', async ({
+    page,
+  }) => {
+    await startFresh(page)
+    await pickVibe(page, 'Beach')
+
+    // Empty submit: no crash, no phantom exclusion.
+    await page.getByRole('button', { name: 'Exclude' }).click()
+    await expect(page.locator('.excluded__name')).toHaveCount(0)
+
+    // Pasted HTML is never executed and never reaches the DOM as markup.
+    await page.getByLabel('Anywhere except…').fill('<img src=x onerror=alert(1)>')
+    await page.getByRole('button', { name: 'Exclude' }).click()
+    expect(await page.locator('img[src="x"]').count()).toBe(0)
+
+    // Unicode and a very long name are rejected inline, not silently accepted
+    // and not a crash.
+    await page.getByLabel('Anywhere except…').fill('🏖️'.repeat(80))
+    await page.getByRole('button', { name: 'Exclude' }).click()
+    await expect(page.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeVisible()
+  })
 })

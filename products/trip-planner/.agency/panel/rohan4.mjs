@@ -9,17 +9,18 @@ await p.waitForTimeout(300)
 await p.getByRole('button', { name: 'Continue' }).click()
 await p.waitForTimeout(800)
 
-// set dates
 const startInput = p.locator('input').nth(0)
 await startInput.fill('10/10/2026')
 const endInput = p.locator('input').nth(1)
 await endInput.fill('15/10/2026')
 
-// exclude Goa
 await p.locator('input[placeholder="e.g. Goa"]').fill('Goa')
 await p.getByRole('button', { name: 'Exclude' }).click()
 await p.waitForTimeout(300)
 
+await p.getByRole('button', { name: 'Continue' }).click()
+await p.waitForTimeout(800)
+
 console.log(await p.locator('body').innerText())
-await p.screenshot({ path: '.agency/screenshots/03-filled-basics.png', fullPage: true })
+await p.screenshot({ path: '.agency/screenshots/04-after-continue.png', fullPage: true })
 await b.close()

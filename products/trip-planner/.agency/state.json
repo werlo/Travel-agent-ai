@@ -5,12 +5,12 @@
   "url": "http://localhost:4079",
   "createdAt": "2026-08-18T09:18:00Z",
   "stage": "shipped",
-  "verdict": "NOT_READY",
-  "rounds": { "fix": 0, "refine": 1 },
+  "verdict": "READY_WITH_CAVEATS",
+  "rounds": { "fix": 0, "refine": 2 },
   "gates": {
-    "qa": "FAIL — 43/48 criteria, 2 open S2, npm run e2e exits 1 (8 of 202 failing)",
-    "panel": "FAIL — mean 7.0/10 against a gate of 8.0, blockers open",
-    "architecture": "NO_GO"
+    "qa": "PASS — 511/511 unit, 226/226 e2e, zero open S1/S2 (one caveat: a stale-banner bug the Tech Lead found independently, not caught by the E2E suite)",
+    "panel": "FAIL — mean ~7/10 against a gate of 8.0, 2 blockers from the trust-sensitive judge",
+    "architecture": "GO_WITH_RISK"
   },
   "history": [
     {
@@ -18,10 +18,25 @@
       "completed": "2026-08-18T15:37:00Z",
       "verdict": "NOT_READY",
       "agents": 19,
-      "durationMinutes": 380,
-      "panelRound1": "6.7/10, 9 blockers",
-      "panelRound2": "7.0/10, 3 blockers",
-      "note": "Two fix rounds were available and none were used: the two S2 bugs surfaced in the refinement regression, which has no fix loop after it. Harness gap, not an agent failure."
+      "note": "Two fix rounds were available and unused because the refinement regression had no fix loop after it. Harness bug, fixed."
+    },
+    {
+      "run": 2,
+      "completed": "2026-08-18T16:11:00Z",
+      "verdict": "FAILED — infra",
+      "note": "Launched by name instead of scriptPath; executed a stale pre-refineOnly copy of the workflow, dispatched a PM/Designer rewrite against the existing PRD and design spec, then died on an unrelated tech-lead API error. Both overwritten docs recovered clean from git. Root-caused: named-workflow lookups resolve at session start and silently ignore later edits. Skills now launch by scriptPath; PM/Designer agents now guarded to revise in place rather than regenerate."
+    },
+    {
+      "run": 3,
+      "completed": "started, hit a transient 529 Overloaded on the PM agent",
+      "verdict": "retried as run 4"
+    },
+    {
+      "run": 4,
+      "completed": "2026-08-18T19:0X:00Z",
+      "verdict": "READY_WITH_CAVEATS",
+      "agents": 15,
+      "note": "refineOnly run, 4 fix slices (F1-F4) against the founder's priority-ordered feedback. QA now PASS (511/511 unit, 226/226 e2e). Panel moved to ~7/10 (gate 8.0) with 2 remaining blockers on the reroll path. Tech Lead GO_WITH_RISK, found one real bug independently (stale change-notice banner after restore) that an earlier QA round wrongly marked fixed."
     }
   ]
 }

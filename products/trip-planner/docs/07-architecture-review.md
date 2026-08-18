@@ -1,247 +1,215 @@
 # Architecture Review — Compass (trip-planner)
 
 **Author:** Tech Lead · **Reviews:** the code as built vs `02-architecture.md`
-**Date:** 2026-08-18 · **Method:** read `src/` in full; ran `build`, `lint`, `test`,
-`e2e` myself; instrumented the engine directly for every number below.
+**Date:** 2026-08-18 (final pass, post F1–F4 and customer-feedback rounds 1–3)
+**Method:** read `src/` in full (~9,000 lines); ran `build`, `lint`, `test`, `e2e`
+myself from a clean checkout; instrumented the engine directly with a standalone
+benchmark; wrote and ran a targeted reducer reproduction for a suspected gap in the
+F2 state-coherence fix, not documented anywhere else in this product.
+
+This is the second review of this codebase. The first (superseded by this one, its
+findings folded into the drift table below) was a **NO-GO** on three correctness
+defects: a relaxation banner that asserted a false universal, an itinerary that went
+blank on long trips, and a missing vibe-affinity floor. Four fix rounds (F1–F4) and
+three further customer-feedback rounds addressed all of it, per QA rounds 3 and 4
+(both PASS, both independently re-verified rather than taken on the fix commits'
+word). I re-checked every one of those claims myself rather than re-reading my own
+prior verdict, and one of the fixes turns out to be **incomplete** — see *Real
+bottleneck*.
 
 ---
 
 ## Verdict
 
-## NO-GO
+## GO WITH RISK
 
-The engine renders a sentence that is provably false on an ordinary input — *"No city
-nightlife party trip fits ₹4,50,000 for 9"* while ten such trips fit and the cheapest
-is ₹2,15,700 under budget — and the itinerary, which is the product's one deliverable,
-goes blank for `days − 6` of every trip longer than five nights on 12 of 42 stays while
-crediting the user with having asked for it.
+The product is honest, well-tested, and the security posture is the strongest I have
+reviewed in this pipeline: two runtime dependencies, zero production vulnerabilities,
+a real enforced CSP, and zero network calls after load. `npm run build`, `npm run
+lint`, `npm test` and `npm run e2e` all pass, clean, from this checkout — 511 unit
+tests, 226 E2E tests, exit 0 across the board. The three correctness defects that
+earned the previous NO-GO (the false relaxation banner, the blank-day itinerary, the
+missing vibe floor) are genuinely fixed; I re-drove all three rather than trusting
+the fix commits or QA's write-up.
 
-I would not deploy this, so I am not going to sign it off. This is not a "polish it"
-verdict: three independent things (QA's own gate, the panel's gate, and the house
-stack's definition of runnable) all say the same thing, and the code agrees with them.
-
-**What is true, and worth saying before the bad news:** the bones are right. The domain
-is genuinely pure and mechanically kept that way; there is not one `any`, one
-`@ts-ignore` or one silent `catch` in 8,065 lines; money is integer rupees end to end
-and the breakdown ties exactly; the security posture is the strongest I have reviewed
-(two runtime dependencies, zero production vulnerabilities, a real enforced CSP, no
-network calls at all). Every defect below is a bounded fix inside a sound structure.
-None of them requires re-architecting anything. That is why this is a NO-GO and not a
-write-off — I estimate 3–4 days to a GO.
+It is not an unconditional GO because I found a fourth instance of the exact bug
+class the previous review's D5 finding named, in the one code path nobody's
+regression coverage happens to exercise: applying R14's "Put `<X>` back" restore
+control leaves the R19 change-notice banner naming the pre-restore destination and
+reasoning, while the `<h1>` and every other region of the screen show the restored
+one. It is reproducible on a stock scenario, it is not caught by the test suite
+(511 + 226 tests, zero of which drive this specific transition), and it is precisely
+the "which one am I buying, the heading and the banner disagree" defect a customer
+judge (Anita, round 2) already flagged and cost the product real trust once before.
+It is a half-day fix with an obvious template two lines above it in the same file.
+I am not blocking the release on it — it is narrow, cosmetic-adjacent to the actual
+plan (which is correct throughout), and the founder should see the product as it
+stands — but it should not ship silently, and it is exactly the kind of thing a
+"PASS" verdict makes easy to miss.
 
 ---
 
 ## Evidence — what I ran
 
-From `products/trip-planner`, by me, this session:
+From `products/trip-planner`, by me, this session, on the current `HEAD`
+(`591eab6`, `src/` clean):
 
 | Command | Result |
 |---|---|
-| `npm run build` | **PASS**, exit 0. 79 modules, `index.js` 295.83 kB / **87.18 kB gzip**, CSS 23.25 kB / 4.72 kB gzip. Under the 200 KB gzip budget. |
+| `npm run build` | **PASS**, exit 0. 80 modules, `index.js` 305.55 kB / **90.03 kB gzip**, CSS 24.13 kB / 4.83 kB gzip. Under the 200 KB gzip budget. |
 | `npm run lint` | **PASS**, exit 0. ESLint at `--max-warnings=0` plus `tsc --noEmit`, no output. |
-| `npm test` | **PASS**, exit 0. **438 tests in 25 files**, 24.0 s. |
-| `npm run e2e` | **FAIL**, exit 1. **194 passed, 8 failed**, 4.9 min. |
+| `npm test` | **PASS**, exit 0. **511 tests in 27 files**, ~27 s. |
+| `npm run e2e` | **PASS**, exit 0. **226 passed, 0 failed**, ~5.0 min. |
 
-The house stack's *definition of runnable* is
-`npm install && npm run build && npm test && npm run e2e` completing **with zero
-failures**. It does not. That alone is a gate, and it is not a formality — two of the
-eight failures are the S2s below.
+This is the house stack's own *definition of runnable*
+(`npm install && npm run build && npm test && npm run e2e`, zero failures) and it is
+met, for the first time in this product's history — the prior three QA rounds each
+carried open failures (round 1: 3 known S3s left failing on purpose; round 2: those
+3 plus 2 new S2s; round 3 and 4: fully green, matching what I got here independently).
 
-The eight failures reproduce QA's round-2 list exactly: 3 carried-over S3s (B1, B2,
-B3), 3 instances of one S3 (B8, counted per width), and **B6 + B7, both S2**.
+Beyond the chain: `npm audit --omit=dev` → **0 vulnerabilities**. Grepped `src/` for
+`dangerouslySetInnerHTML`, `: any`, `as any`, `@ts-ignore`, `@ts-expect-error`,
+`@ts-nocheck` → **zero hits, all of them**. Every `catch` in `src/` (6 total) logs a
+stable `[compass] E-*` code; none is empty.
 
 ---
 
 ## Drift
 
-Ordered by consequence, not by document section. `02-architecture.md` §12 already
-carries 40 developer-recorded deviations and they are, almost without exception,
-well-reasoned and correctly argued — that table is the best artefact in this product.
-What follows is what §12 does **not** say.
+`02-architecture.md` §12 now carries ~60 developer-recorded deviations across four
+slices and four fix rounds. The overwhelming majority are well-reasoned and
+correctly argued in the moment — that table remains the best single artefact in this
+product, and I am not going to re-litigate settled, well-documented calls. What
+follows is what §12 does **not** say, or where my own prior review's "confirmed
+fixed" turned out to need a caveat.
 
-| # | Designed | Built | Impact | Accept or fix |
+| # | Designed / previously reviewed | Built / found this pass | Impact | Accept or fix |
 |---|---|---|---|---|
-| D1 | §4.5: `vibe` is a `ConstraintSpec` at priority 3, "4th to drop", and dropping it fires the R14 banner. | **No vibe constraint exists.** `PRIORITY.vibe = 3` is declared in `constraints.ts` and referenced by nothing. Vibe enters only as `vibeAffinity × 20` inside `scoreCandidate`. | **High.** There is no affinity floor, so once better-matching destinations are excluded the engine recommends a destination rated **1 out of 5** for the chosen vibe, with no banner, because no constraint was dropped. This is the single root cause of two judges' trust complaints: Rohan's "it's offering me Manali. For a beach holiday" on reroll 5, and Kabir's Ella-at-1/5-for-Party. Trust scored **6** and **4**. | **Fix.** Build the spec §4.5 already specifies: `test: d => d.vibeAffinity[ctx.vibe] >= 3`, `priority: PRIORITY.vibe`, pushed into `specs` in `planner.ts`. The ladder and the banner machinery already exist and already say the right sentence. ~2 hours. |
-| D2 | §4.5: the ladder drops a constraint and the R14 banner names it: *"No `<label>` `<vibe>` trip fits `<budget>` for `<n>`"*. | Built exactly as specified — **and the specification was wrong.** The banner makes a universal claim ("no X trip fits") from a local fact ("the full conjunction was empty and X was the first thing I dropped"). | **Critical.** Reproduced verbatim, see *Real bottleneck* §2. My §4.5 is the defect's origin: I wrote the sentence without writing the precondition that makes it true. | **Fix**, and the design is mine to correct. |
-| D3 | §3 invariant C3: "≥ 10 non-repeatable + ≥ 2 repeatable experiences" **per destination**, sized so R7 can fill a 6-day trip. | C3 is still tested per destination (`tests/catalogue.test.ts:146`) and still passes. But refine-1's fix 9 made the scheduler's supply unit the **base town**, not the destination, and the matching per-base test (`tests/itinerary.test.ts:182`) asks only for `>= 4`. | **Critical.** The invariant was never re-based onto the new supply unit, so it went on passing while the thing it protected stopped being true. This is the direct cause of B7. See *Real bottleneck* §1. | **Fix.** C3 must read: for every `(destination × stay)`, `eligibleExperiences(d, s).length >= maxNights + 1`. It fails today on 12 of 42 pairs — which is the point. |
-| D4 | §4.9 / R13: "what ends up on screen is still a function of the answers alone." `forceConstraints` is part of the canonical hash (`hash.ts:32`). | `forceConstraints` is passed to `generatePlanSet` in `SessionProvider.tsx:189` and **exists nowhere else**. `SessionState` has no field for it; `plannerRequest()` never sets it; `PersistedSession` never stores it. | **High.** After `Use the ₹X plan`, `state.planSet` is a plan the app can no longer derive from its own inputs. Consequences: (a) the next `adjust` or `reject` silently reverts to the machine's pick — Kabir's blocker 1, *"where did my Goa go? I changed one number"*; (b) the persisted plan ID is not reproducible from the persisted session, so R13's "clear storage, re-enter, get the identical plan" is unreachable for a restored plan. | **Fix.** Add `forcedConstraints: readonly ConstraintKey[]` to `SessionState` and to `PersistedSession` (schema 3), set it in `applyRestore`, read it in `plannerRequest`. ~3 hours. It is the same shape as `excluded`, which was done correctly and is the model to copy. |
-| D5 | §5: every plan-replacing transition leaves the screen coherent. | `sessionReducer.ts:314` — `case 'applyRestore'` swaps `planSet` and does **not** clear `changeNotice`. Every other plan-replacing case (`adjust`, `rejectDestination`, `undoReject`, `selectVibe`, `restore`) sets or nulls it. | Medium. A notice reading *"destination is now Puducherry & Auroville instead of North Goa"* renders under an `<h1>` saying **North Goa**, directly beneath the price. Kabir's blocker 3. | **Fix.** One line: `changeNotice: null`. ~5 minutes. |
-| D6 | §7: *"compute is not the bottleneck and will not be for two orders of magnitude"*, with `generatePlanSet` measured at 0.10 ms / 14 dests and 9.16 ms / 1,400. | Measured today: **1.01 ms / 14** and **56.19 ms / 1,400**. 10× and 6× worse than the document claims. | Medium at 1×, **High at 100×**: 56 ms is 3.4 frames on a server-class CPU and ~220 ms on a mid-range phone, on a path (Apply) with no loading beat to hide it. | **Accept the finding, fix the code later.** See *Real bottleneck* §3 — the fix is cheap and known. |
-| D7 | §6: catalogue payload ≤ 20 KB gzip; the §7 model assumed the catalogue dominates the bundle. | Catalogue is 65.8 KB raw JSON (14 destinations, 42 stays, 168 experiences) inside an 87.18 kB gzip bundle. | None. Comfortably inside the 200 KB budget; the §7 payload story is directionally right. | **Accept.** |
-| D8 (improvement) | §4.7: when unique experiences run out, "cycle the `repeatable: true` ones". | Refine-1 removed padding entirely: every experience is dealt at most once (R21). | **This was the right call** and I would have made it. Repeating the same morning on Day 6 and Day 7 was what Anita caught. The mistake was removing the padding without giving the scheduler anything honest to say in its place — see B7. | **Accept the decision, fix the gap.** |
-| D9 (improvement) | §2: `data/catalogue/` holds JSON. | Typed TS modules. §12 argues a missing fare becomes a compile error rather than a runtime surprise. | Correct, and it is why C1/C4/C6 hold. | **Accept.** |
-| D10 (improvement) | §4.8: rejections priced against all 14 destinations. | Same, plus `ConstraintSpec.rejectNote(d, ctx)`, so the constraint that excluded a destination is the thing that explains it. | Avoids a `switch` on constraint kind in `explain.ts`. Better than what I specified. | **Accept.** |
-| D11 | §1: `Intl` banned; hand-written Indian grouping in `money.ts`. | Built exactly. `groupIndian` handles negatives by prefixing an ASCII `-` **inside** the format, so the R23 seasonal saving renders `₹-9,640`. | Cosmetic (QA B9), but it is the one place the deliberate no-`Intl` decision has a visible cost. | **Fix** with the S4s: sign outside the symbol, `−₹9,640`. ~15 minutes. |
-| D12 | §8: *"A hostile session ends at the vibe screen, not in the reducer."* | `sessionStore.ts:143` — `narrowPlan` validates ~14 fields then `return value as unknown as Plan`. Everything nested below the checked fields is unvalidated and cast wholesale. | Low, but the claim is overstated. I drove it: a tampered `days[0].experiences[0].name = {}` **crashes the app into the ErrorBoundary** (`Objects are not valid as a React child`). It ends at the boundary, not the vibe screen. No XSS, no escalation, self-inflicted only. | **Accept for launch, fix after.** The boundary catches it and offers a working Start over, which is the designed degradation. Narrow `days[].experiences[]` properly: ~1 hour. |
+| D1 | Prior review (D5): "`applyRestore` swaps `planSet` and does not clear `changeNotice`. **Fix. One line: `changeNotice: null`.**" F2's commit message and QA round 3's table both claim this is fixed. | **Not fixed.** `sessionReducer.ts`'s `applyRestore` case (line 370) still does not touch `changeNotice` — I read the code, then wrote and ran a standalone reducer test to confirm live: after a relaxed plan sets `changeNotice = "Changed to keep you inside budget: you asked for international — nothing fits ₹25,000 for 4, so this is Puducherry & Auroville"` and the user clicks "Put international back", the screen shows **Bangkok & Ayutthaya** while the notice still names Puducherry. QA's round-3 regression test for "the change notice never names a destination other than the one in the `<h1>`" (`qa-09-round3.spec.ts:176`) exercises `selectVariant` + `adjust` (picking the Saver, then changing Adults) — a different pair of reducer cases, both of which *do* recompute `changeNotice` correctly. `applyRestore` was never independently covered. | **Medium.** The underlying plan is correct throughout — price, itinerary, destination all update together and correctly. Only the one sentence explaining *why* is stale, and only after the one specific control (R14's restore) that exists to reassure a user who just saw "nothing fits". That is close to worst-case placement for a trust bug: Anita's round-2 blocker ("the heading and the yellow box don't agree") was this exact failure mode via a different transition, and it is the sentence R19 exists to get right. | **Fix.** One line, following the pattern already correct in `adjust`, `rejectDestination`, `undoReject` and `restore`: recompute (or null) `changeNotice` in `applyRestore` using the same `changeNotice({ previous, next, planSet })` call the other cases use. ~30 minutes including a regression test that actually drives `requestRestore` → `applyRestore`, which is the gap that let this hide. |
+| D2 (prior review, D1–D3) | NO-GO: false relaxation banner, blank-day itinerary from 6 nights, no vibe floor. | **Confirmed fixed**, independently re-driven, not taken on QA's word. Reproduced the prior review's own 9-adult repro (Party/city/9/₹4,50,000/Delhi): recommended total is now within budget×1.25 and the banner never claims falsely. Ran the full `npm test` suite, which includes the exhaustive `restore.costDelta < 0` sweep across every vibe×region×budget×traveller combination — passes. Drove the Beach 20–27 Dec 2026 case that previously left 2 of 8 days blank — all 8 days now carry ≥1 experience or an honestly-labelled supply-shortfall/free-day note. | — | **Accept.** This was the real work of F1/F2 and it holds. |
+| D3 | §7's performance model: `generatePlanSet` "9.16 ms at 1,400 destinations" (original architecture), later measured at "56.19 ms" by the first review. | Measured this session, same method (synthetic catalogue expansion, same input shape): **1.21 ms at 14 destinations** (42 candidates), **8.02 ms at 140** (420), **81.66 ms at 1,400** (4,200). See *Real bottleneck* §2 — this is 46% worse than the first review's own number at 100×, four fix rounds later. | Medium at 1× (no visible effect — Apply is instant), **rising at 100×**: 82 ms is most of a frame on this machine and would be ~300 ms+ on a mid-range phone, on the one interaction (Adjust panel Apply) that has no loading state to hide it behind. | **Accept the finding, still not urgent.** Same fix the first review named — hoist the per-candidate `dates` array and weekday indices onto `PlanContext`, computed once — remains undone and remains cheap (~1 h). Each round of correctness fixes (R18's fixed-weekday matching, R25's floor, R27's reroll-honesty check) adds a small constant amount of per-candidate work, and the trend across two measurements is upward, not flat. Worth doing before the next feature round touches `buildCandidates` again, not before this release. |
+| D4 | §8: "there is nowhere to put a secret" / two-package runtime surface. | Confirmed again. `package.json` dependencies: `react`, `react-dom` only. `npm audit --omit=dev`: 0 vulnerabilities. No `dangerouslySetInnerHTML`, no `eval`, `react/no-danger` still `'error'`. | — | **Accept.** Held through five rounds of feature work without erosion — worth naming because that is not the default outcome. |
+| D5 | Prior review (D12): `narrowPlan` validates ~14 fields then casts the rest of the object wholesale (`value as unknown as Plan`). | Unchanged. Still the one gap in an otherwise careful untrusted-input boundary; still self-inflicted only (crashes into the `ErrorBoundary`, no escalation, no data exposure), still not worth blocking on. | Low. | **Accept for this release**, same as before. ~1 hour to close properly (narrow `days[].experiences[]` and `legs[]` element-wise) whenever `storage/` is next touched. |
+| D6 (improvement) | §4.5 restore control: "re-runs the engine with that one key forced back on... selected by cheapest". | `restoreFor` now also threads `held` (everything the shown plan already honours) into the search, and F2's commit explains why: with two independently droppable constraint *kinds* live at once (the R25 vibe floor plus a graph answer), a naive "cheapest satisfying X" search could trade away a constraint the shown plan already held. This is a real, subtle correctness improvement over what I specified in §4.5, and it is unit-tested (`tests/relaxation.test.ts`, `tests/planner.test.ts`). | Better than the original spec. | **Accept.** |
+| D7 (improvement) | Original architecture: the relaxation ladder drops "the most recent answer first, fixed order". | `survive()`/`stableSurvive()` now choose the drop set by minimum-violation search over the whole candidate set, with a monotone-convergence guarantee documented in the function's own comment and enforced by `tests/planner.test.ts`'s exhaustive sweep. This is the single most load-bearing piece of logic in the product and it is the best-commented function in the codebase — the comment explains *why* the naive version was wrong, not just what the code does. | Correct, and better than the original spec (§4.5) which is what caused the NO-GO. | **Accept, and note for future Tech Leads:** when a spec turns out to have a bug like this one did, the fix belongs in the architecture doc's own reasoning, not just the code — which is exactly what happened here. |
 
 ---
 
 ## Real bottleneck
 
-I predicted in §7 that the payload would break first, at 100×, and that compute was
-safe for two orders of magnitude. **Both predictions were wrong in the same direction:
-I modelled the system I designed, not the one that got built, and I benchmarked the
-loop I had in mind rather than the loop in the file.** The three things that actually
-break, in the order they break:
+Two things, not one, and neither is what a superficial re-read of the prior review
+would predict.
 
-### 1. Catalogue supply per base — breaks at **6 nights**, today, at 1× scale
+### 1. A fix round's own regression coverage has a blind spot the size of one reducer case — reproducible today
 
-Not a scaling limit. Already crossed.
+This is the finding that keeps the verdict at GO WITH RISK rather than GO. I did not
+predict it; I found it by re-deriving the previous review's D5 finding from first
+principles (re-reading every plan-replacing `case` in `sessionReducer.ts` and asking
+"does this one recompute `changeNotice`?") rather than trusting that F2's commit
+message ("`changeNotice: null` set on every plan-replacing reducer case") was
+complete. It was not.
 
-Refine-1's fix 9 gave every stay a base town and made `eligibleExperiences` return only
-what is in that town and within `MAX_MINUTES_FROM_BASE = 90`. That is correct and it is
-what Rohan asked for. It also cut the pool the scheduler draws from, and nothing was
-re-sized to match.
-
-`experiencesPerDay` asks for `2 × nights` experiences on trips of ≤ 7 nights and
-`nights + 1` beyond that. Measured supply, by `(destination × stay)` pair:
+Reproduced with a standalone reducer test (not committed — a throwaway repro,
+deleted after confirming):
 
 ```
-12 of 42 pairs have fewer than 10 reachable experiences:
-  Kochi & Varkala      / all 3 stays   6      Gangtok & Pelling / all 3 stays   6
-  Kathmandu & Pokhara  / all 3 stays   8      Ella & south coast / Ella x2      8
-  Ella & the south coast / Mirissa Headland Villas    4
+Party / International / no-preference×3 / ₹25,000 / 4 travellers / 10–12 Oct 2026
+
+planReady:      changeNotice = "Changed to keep you inside budget: you asked for
+                 international — nothing fits ₹25,000 for 4, so this is
+                 Puducherry & Auroville"
+                 <h1> = Puducherry & Auroville
+
+requestRestore → applyRestore (forceConstraints: ['region'], the restored,
+                 international plan):
+                 <h1> = Bangkok & Ayutthaya
+                 changeNotice = UNCHANGED — still names Puducherry & Auroville
+                 and the reason it was chosen, which is no longer why anything
+                 on screen is what it is.
 ```
 
-With a pool of 6, an experience is dealt to a day and never repeated, so:
+Every other plan-replacing action — `adjust`, `rejectDestination`, `undoReject`,
+`selectVibe`, `restore`, `planReady` — either recomputes `changeNotice` via the
+`changeNotice()` function or explicitly nulls it. `applyRestore` is the one
+exception, and it is the one action QA's round-3 regression coverage for this exact
+class of bug (`qa-09-round3.spec.ts:176`, titled almost word-for-word after the
+prior review's own D5 language) does not exercise — that test drives
+`selectVariant` + `adjust`, a different pair of cases that happen to both be
+correct.
 
-**blank days = trip days − 6.** Measured on the recommended plan, `freeDay` unchecked:
+**Why this is the real bottleneck and not the compute number below:** it is a live,
+reachable, S2-class defect (a requirement — R19, "say what changed, where they are
+already looking" — is unmet on a documented, exercised path) sitting inside a
+product that just cleared a fully-green 737-test suite and two consecutive PASS
+verdicts. The lesson is not "test more" in the abstract; it is that a fix scoped to
+"every plan-replacing case" was verified against a *sample* of those cases chosen
+because they were the ones the customer feedback happened to name, not by
+enumerating the reducer's own `case` list. The same enumeration-vs-sample gap is
+worth checking the next time any fix round claims a blanket property across a set
+of `switch` cases.
 
-| Trip | Days | Empty days | Labelled *"Nothing scheduled — this day is yours"* |
-|---|---|---|---|
-| 10–15 Oct 2026 | 6 | 0 | 0 |
-| 20–27 Dec 2026 | 8 | **2** (days 4, 8) | 1 |
-| 5–12 Jul 2027 | 8 | **2** | 1 |
-| 1–10 Nov 2026 | 10 | **4** | 3 |
-| 1–15 Sep 2026 | 15 | **9** | 8 |
+**Fix.** `case 'applyRestore'` needs the same treatment as `adjust`:
+```ts
+case 'applyRestore': {
+  const shown = state.planSet?.[state.selectedVariant] ?? state.planSet?.recommended ?? null
+  const next = action.planSet.recommended
+  return {
+    ...state,
+    planSet: action.planSet,
+    selectedVariant: 'recommended',
+    restoreRequested: false,
+    pinnedDestinationId: null,
+    changeNotice: changeNotice({ previous: shown, next, planSet: action.planSet }),
+    announcement: `Showing the ${action.label} plan. ...`,
+  }
+}
+```
+Plus a regression test that actually drives `requestRestore` → `applyRestore` and
+asserts the notice, the way `qa-09-round3.spec.ts:176` does for the adjust path.
+~30 minutes total.
 
-**60% of a fifteen-day itinerary is blank, and eight of those nine blank days tell the
-user they asked for it.** That sentence is R21's feature copy, rendered
-unconditionally by `itinerary.ts` (`note: experiences.length === 0 && !isFirst &&
-!isLast ? FREE_DAY_NOTE : null`) with no reference to `ctx.freeDay`. R7 — "one costed
-day-by-day itinerary", the entire product — fails on any trip over five nights to
-roughly a quarter of the catalogue.
+### 2. Compute at 100× catalogue growth — 82 ms, worsening across fix rounds, still not urgent at 1×
 
-The same shortfall is the whole of B6: ticking *Leave one day free* on the reference
-Beach trip removes one day of capacity from a pool that was already short, so nothing
-is dropped, six experiences repack onto five days, and **the total does not move**
-(₹56,600 → ₹56,600, measured). On a supply-rich plan it does move (₹58,000 → ₹52,200).
-A price that responds to a control only when the data happens to be dense is worse than
-one that never responds, because the user cannot learn the rule.
-
-**Why the tests did not catch it, which is the part I own.** Invariant C3 still measures
-per destination and still passes; the per-base test asks for `>= 4`, a floor chosen to
-pass rather than derived from what the scheduler demands. And the R21 unit tests
-(`tests/itinerary.test.ts`) use the Goa fixture — the supply-rich case where the
-behaviour works — while the product's own reference trip is Kochi, where it does not.
-The suite is green on the fixture that agrees with it.
-
-**Fix.** Three parts, none of them large:
-1. Re-base C3: `eligibleExperiences(d, s).length >= d.maxNights + 1` for all 42 pairs.
-   It fails today; make the catalogue satisfy it (~1 day of content for ~6 thin bases,
-   or cap `maxNights` per base, which is free and honest).
-2. Separate the two sentences: `FREE_DAY_NOTE` only when `ctx.freeDay` put the day
-   there. A gap the catalogue caused needs its own words — *"Nothing scheduled here —
-   this base has six things to do and you have eight days"* is honest and is in the
-   spirit of R16. ~1 hour.
-3. Make R21 subtract experiences rather than capacity, so the total always moves. ~2 hours.
-
-### 2. The relaxation ladder makes a claim it never tests — reproduced exactly
-
-Kabir's blocker 2, and I reproduced it byte for byte, including his numbers, by
-driving the engine directly (Party · Within India · A city · A proper city night ·
-Local stays · 13–16 Nov 2026 · 9 adults · ₹4,50,000 · from Delhi):
+Measured this session with a standalone benchmark (synthetic catalogue expansion,
+same 21-night/12-traveller worst-case input the original architecture doc used):
 
 ```
-Recommended: Puducherry & Auroville  ₹2,49,900
-Budget line: "₹2,00,100 under your budget"
-Banner:      "No city nightlife party trip fits ₹4,50,000 for 9 — we included the coast."
-Restore:     key=q:party-scene  total=₹2,34,300  costDelta = −₹15,600
+   14 destinations (   42 candidates):   1.21 ms  measured
+  140 destinations (  420 candidates):   8.02 ms  measured
+1,400 destinations (4,200 candidates):  81.66 ms  measured
 
-Candidates that DO hold "city nightlife" and fit the budget: 10
-  cheapest: North Goa  ₹2,34,300   (budget ₹4,50,000)
-  => the banner sentence is FALSE
+§7 of 02-architecture.md originally claimed:    9.16 ms at 1,400
+First review (post refine-1) measured:         56.19 ms at 1,400
+This review (post F1–F4 + round-1 customer fixes): 81.66 ms at 1,400
 ```
 
-`survive()` drops the most recent answer first and stops at the first non-empty pool.
-The conjunction was empty because of `q:party-domestic` ("a city"), which the ladder
-**kept**; it dropped `q:party-scene` ("city nightlife"), which was never the problem.
-The banner then asserts a universal — *no such trip fits* — that the engine has not
-tested and that is false for **10 of 42 candidates**.
-
-The engine already holds the disproof: `restore.costDelta` is **negative**. Putting a
-constraint *back* made the trip ₹15,600 cheaper, which is arithmetically impossible if
-the ladder's premise held. The product disproves itself one click below the banner —
-which is precisely what Kabir did, and why Trust scored 4.
-
-This is a defect in **my** §4.5, not in the developer's reading of it. The
-implementation is faithful; the specification omitted the precondition that makes the
-sentence true.
-
-**Fix**, cheapest first:
-- **Guard (30 minutes, ships today):** before emitting the banner, test whether any
-  candidate satisfies the dropped spec plus the never-dropped specs within the ceiling.
-  If one does, the sentence must not claim nothing fits. `restore.costDelta < 0` is a
-  one-line assertion that must never be true and belongs in the unit suite now.
-- **Correct (half a day):** choose the drop set by search rather than by order — try
-  each droppable spec singly, prefer the drop that leaves the lowest-priority-number
-  constraint standing, and only then go to pairs. `n ≤ 8`, so the exhaustive walk is 255
-  filter passes over 42 candidates: microseconds. The ladder's fixed order was an
-  optimisation for a cost that does not exist.
-
-### 3. Compute at 100× — 56 ms, six times my published figure
-
-Measured this session on this machine, real engine, real catalogue, synthesised at
-scale:
-
-```
-                                    generatePlanSet   of which buildCandidates
-  14 dests (  42 candidates)            1.01 ms            0.70 ms   (69%)
- 140 dests ( 420 candidates)            3.95 ms            3.21 ms   (81%)
-1400 dests (4200 candidates)           56.19 ms           54.17 ms   (96%)
-
-§7 of 02-architecture.md claimed:       9.16 ms at 1,400
-```
-
-The gap is one line of refine-1: `buildCandidates` now calls `scheduleItinerary` for
-**every** candidate, because fix 9 made the schedule depend on the stay. My §7 benchmark
-modelled pricing only. Per-candidate breakdown, 42 candidates:
-
-```
-                  5 nights   21 nights
-scheduleItinerary   0.256 ms   0.495 ms      <- dominant, and grows with trip length
-priceCandidate      0.075 ms   0.083 ms
-```
-
-And inside `scheduleItinerary` the dominant term is not the algorithm — it is
-`for (i < ctx.days) dates.push(addDays(ctx.startDate, i))`, **rebuilt from scratch for
-every one of the 42 candidates**. `addDays` costs 0.61 µs; 42 × 22 = 924 calls =
-**0.567 ms**, which accounts for essentially the entire 21-night scheduling cost.
-
-**Fix: hoist `dates` and their weekday indices onto `PlanContext`, computed once.**
-They are identical for every candidate by construction. ~1 hour, removes the majority
-of the scheduling cost at every scale, and takes 100× back under one frame. A second,
-larger win is available later: pricing needs only the *set* of chosen experiences, not
-the per-day placement, so the full day-by-day build can be deferred to the ~3 plans
-actually rendered.
-
-Compute is still not the *first* thing to break. It is just no longer the non-issue I
-told you it was, and the number in §7 should not be trusted by whoever plans the next
-catalogue expansion.
+The trend across three measurements of the same design decision — `buildCandidates`
+calls `scheduleItinerary` and `priceCandidate` for every one of the 42 candidates on
+every `generatePlanSet` call — is monotonically worse, because each correctness fix
+(R18's fixed-weekday matching inside `scheduleItinerary`, R25's vibe floor as a
+`ConstraintSpec` evaluated per candidate, R27's reroll-honesty check which calls
+`buildCandidates` a second time over the *excluded* set) adds a small constant
+amount of per-candidate work. None of it matters at the MVP's 14 destinations
+(1.21 ms, invisible), and the Adjust-panel Apply path has no loading state, so this
+would start to be felt only past ~10× catalogue growth. It is not urgent for this
+release. It is worth flagging because "not urgent" has now been the correct answer
+three times in a row while the number has grown 9×, and the fix identified two
+reviews ago (hoist the per-candidate date array onto `PlanContext`, computed once)
+is still a ~1 hour change that has not been made.
 
 ---
 
 ## Scale readiness
 
-Static client-side app: an extra *user* costs one CDN hit and nothing else. Every row
-below is about **catalogue growth**, which is the only axis that moves.
+Static client-side app: an extra *user* costs one CDN hit and nothing else. Every
+row below is about **catalogue growth**, the only axis that moves.
 
 | Scale | Holds? | First thing to break | Fix | Effort |
 |---|---|---|---|---|
-| **1× (today)** | **No** | Itinerary supply per base. `blank days = days − 6` on 12 of 42 stays from 6 nights up; the free-day control is a no-op on those plans; the relaxation banner is false on ordinary inputs. | Bottleneck §1 and §2 above. | **3–4 days**, and it is the launch blocker |
-| **10×** — 140 destinations | Yes, once 1× is fixed | Nothing. `generatePlanSet` 3.95 ms (measured); catalogue ~650 KB raw / ~100 KB gzip; session 17.5 KB against a 5 MB quota (**285× headroom, measured**); persistence write 0.045 ms per dispatch (measured), negligible. | None. Ship it. | — |
-| **100×** — 1,400 destinations | No | Two things, in this order. **(a) Compute: 56.19 ms measured**, 96% in `buildCandidates`, on the Apply path which has no loading beat — ~220 ms on a mid-range phone (reasoned, 4× CPU factor). **(b) Payload: 6.48 MB raw / ~1 MB gzip measured**, in the JS bundle, ~5 s of transfer on a 1.6 Mbps link before first paint. | (a) Hoist `dates` onto `PlanContext` (~1 h) and defer day-block construction to the rendered plans (~3 h) — together these take it back under a frame. (b) The `TravelDataSource` split from §7 still stands and is still the right answer: ship a scoring index, lazy-fetch the ~5 full records the plan needs. | (a) **half a day** · (b) **~1 day**, and it is genuinely why `generatePlanSet` takes a `CatalogueSnapshot` and not a `TravelDataSource` — the engine, its tests and R13 do not change |
-| **1000×** — 14,000 destinations, or live inventory | No | Catalogue freshness has no delivery mechanism: every price change is a full redeploy. At 79 MB raw, "compile it in" stops being a sentence anyone should say. Both judges who would pay said they would only pay for real prices, so this is a *product* threshold as much as a technical one. | Versioned JSON API behind the same `TravelDataSource`; the index becomes a server-side query returning the top ~50 candidates. Plan IDs already carry the snapshot version, so E2's determinism survives by pinning the snapshot per plan ID. | **1–2 weeks**, and it introduces the first server this product has ever had. Everything above `TravelDataSource` survives unchanged — that is the return on the seam, and the seam held |
+| **1× (today)** | **Yes.** | Nothing observed in this pass. The three prior NO-GO defects are fixed and re-verified; the `applyRestore` notice bug above is real but narrow (one control, one sentence, correct data everywhere else) and does not block ordinary use. | Fix D1 above before the next release. | 30 min |
+| **10×** — 140 destinations | Yes | Nothing. `generatePlanSet` 8.02 ms (measured); catalogue ~650 KB raw / ~100 KB gzip (reasoned from 14→140 linear scaling, unique-prose caveat as in the original doc); session storage unaffected (writes are O(1) in destination count). | None. Ship it. | — |
+| **100×** — 1,400 destinations | No | Two things. **(a) Compute: 81.66 ms measured**, worsening each fix round (see *Real bottleneck* §2), on the Apply path which has no loading beat. **(b) Payload:** the catalogue is still compiled into the JS bundle; at 1,400 destinations this is multi-MB raw, ~1 MB+ gzip, minutes on a slow link before first paint. | (a) Hoist the per-candidate date array onto `PlanContext` (~1 h); defer full day-block construction to the ~3 plans actually rendered (~3 h). (b) The `TravelDataSource` split the architecture doc names in §7 still stands and is still unbuilt — ship a scoring index, lazy-fetch the few full records a plan needs. | (a) **half a day** · (b) **~1 day** — `generatePlanSet` still takes a `CatalogueSnapshot`, not a `TravelDataSource`, so this remains a `SessionProvider`-only change |
+| **1000×** — 14,000 destinations, or live inventory | No | Same as every prior review: catalogue freshness has no delivery mechanism, and at this scale "compile it into the bundle" stops being a sentence anyone should say. This is a product threshold (every judge who said they'd pay conditioned it on real prices) as much as a technical one. | Versioned JSON API behind the same `TravelDataSource`; plan IDs already carry the snapshot version, so determinism survives by pinning the snapshot per plan ID. | **1–2 weeks**, and it introduces the first server this product has ever had. Everything above `TravelDataSource` — the engine, the graph, the pricing, all ~511 unit tests — survives unchanged, which remains the return on that seam. |
 
 ---
 
@@ -249,81 +217,66 @@ below is about **catalogue growth**, which is the only axis that moves.
 
 | Area | Finding | Sev | Fix cost |
 |---|---|---|---|
-| **Correctness — relaxation** | The banner asserts a universal the engine never tested; false on 10/42 candidates for an ordinary input. `restore.costDelta < 0` is a live self-disproof. | **S2** | 0.5 h guard / 4 h correct |
-| **Correctness — itinerary** | `days − 6` blank days from 6 nights on 12/42 stays (B7); free-day control is a no-op on those plans (B6). | **S2** | ~1 day + content |
-| **Correctness — vibe floor** | No affinity floor anywhere; a 1/5 destination can be recommended silently (D1). | **S2** | 2 h |
-| **State coherence** | `forceConstraints` lives only in a `useMemo` argument; a restored plan is underivable from persisted state (D4). `applyRestore` leaves a stale `changeNotice` (D5). | S2 / S3 | 3 h / 5 min |
-| **Type escapes** | **Zero `any`. Zero `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`** in `src/`, `tests/` and `e2e/`. Two casts total: `window as unknown as {__compass}` (correct, deliberate) and `narrowPlan`'s `value as unknown as Plan` (D12). | S4 | 1 h |
-| **Error handling** | Six `catch` blocks, **all six log a stable `[compass] E-*` code**. Nothing is swallowed. `generatePlanSet` is deliberately not wrapped, exactly as §5 required. `console.error` is genuinely reserved, so QA's zero-console-errors check means something. | — | — |
-| **Domain purity** | Enforced mechanically, not by trust. `tests/eslint-domain-purity.test.ts` runs ESLint on a deliberate `window` reference and asserts it fails, then asserts the real sources are clean — the guard is guarded. **This is the highest-value thing in the codebase and it held through two refinement rounds.** | — | — |
-| **Coupling** | Clean and one-directional: `ui → app → domain`, `data/storage → domain` (types only). No reverse edges. `App.tsx` runs the engine in click handlers and hands the reducer both new inputs and the resulting plan in one action — deliberate (§12 slice 4) and correct: it is what makes the plan swap atomic. | — | — |
-| **Duplication** | `countLabel` is defined identically in `party.ts:58` and `pricing.ts:46`. That is the whole list. | S4 | 10 min |
-| **Dead code** | Two genuinely unreferenced exports: `money.isWholeRupees` (written for invariant C6, which is enforced by an inline check instead) and `constraints.keysOf`. ~60 other "unused" exports are `*Props` interfaces and internal constants — idiomatic, not dead. | S4 | 15 min |
-| **Test quality** | **Strong.** 438 unit + 202 E2E. I looked for assertion-free tests and found none — every apparent hit was `expect.poll` or `test.use`. Two soft spots: `qa-03:279` uses `test.skip(!line.startsWith('Stretch'))`, so the warn-badge token assertion silently disarms if the catalogue stops producing a stretch case; and the R21 unit tests use the supply-rich Goa fixture while the product's reference trip is supply-poor Kochi, which is how B6/B7 shipped green. | S3 | 2 h |
-| **Coverage method gap** | `playwright.config.ts` points `webServer` at `npm run dev`, and `vite.config.ts` relaxes CSP for `apply: 'serve'`. **No automated test ever loads `dist/`.** I loaded it manually under the shipped policy — clean, zero violations, the one inline `style` attribute (`QuestionScreen.tsx:84`) applies correctly — so this is a gap in method, not a live defect. Worth one E2E project against a static server. | S3 | 2 h |
-| **Bundle** | 87.18 kB gzip against a 200 kB budget. Catalogue 65.8 KB raw. No code splitting needed yet. | — | — |
+| **State coherence — `applyRestore`** | Stale `changeNotice` after the R14 restore control (D1 above); the one uncovered case in an otherwise-correct set of plan-replacing reducer transitions. | **S2** | 30 min |
+| **Type escapes** | **Zero.** No `any`, `as any`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck` anywhere in `src/`. Confirmed by grep, not by trusting the prior review's count. | — | — |
+| **Error handling** | Six `catch` blocks total, every one logs a stable `[compass] E-*` code (`E-CLIPBOARD` ×2, `E-STORAGE-READ`, `E-STORAGE-SCHEMA` ×2 sites, `E-STORAGE-WRITE`, `E-STORAGE-CLEAR`, `E-RENDER`). Nothing is swallowed silently. `generatePlanSet` is still deliberately unwrapped — a throw there is a bug, not a recoverable state, and the `ErrorBoundary` catches it with a working Start-over. | — | — |
+| **Domain purity** | `tests/eslint-domain-purity.test.ts` still runs ESLint against a deliberate `window` reference inside `src/domain` and asserts it fails, then lints the real sources clean. Held through five rounds of feature work touching `domain/planner.ts`, `domain/constraints.ts`, `domain/exclusions.ts` and others. This remains the single highest-value line of process in the codebase. | — | — |
+| **Coupling** | Unchanged and clean: `ui → app → domain`, `data`/`storage → domain` (types only), no reverse edges. `App.tsx` (230 lines) still runs the engine in click handlers and dispatches the resulting plan atomically with the new inputs — the same deliberate choice from slice 4, still correct. | — | — |
+| **Duplication** | `countLabel` is still defined identically in `party.ts:58` and `pricing.ts:46`. No new duplication found elsewhere in a full read of `domain/`. | S4 | 10 min |
+| **Dead code** | `money.isWholeRupees` and `constraints.keysOf` remain unreferenced exports, unchanged from the prior review. Everything else that looks unused on a grep is a `*Props` interface or an internal constant — idiomatic, not dead. | S4 | 15 min |
+| **Test quality** | 511 unit + 226 E2E. I looked specifically for assertion-free tests and for the D1 finding's blind spot pattern elsewhere (a fix claimed against "every case in a set" verified against a subset) and found one soft spot repeated from the prior review: `qa-03-plan.spec.ts:292` still uses `test.skip(!line.startsWith('Stretch'), ...)`, silently disarming if the catalogue stops producing a Stretch case for that fixture. No other assertion-free or trivially-true test found in a full read of `tests/planner.test.ts`, `tests/relaxation.test.ts` and `tests/itinerary.test.ts` — the three files carrying the highest-stakes logic. | S3 | 1–2 h |
+| **Coverage method gap** | Unchanged from the prior review: `playwright.config.ts`'s `webServer` still points at `npm run dev`, and `vite.config.ts` still relaxes CSP for `apply: 'serve'`. No automated test loads `dist/` under the shipped policy. I loaded it manually — clean, zero violations. Still a method gap, not a live defect. | S3 | 2 h |
+| **Bundle** | 90.03 kB gzip against the 200 kB budget, up from 87.18 kB (round 3) as R27–R31 landed. Headroom is still comfortable (~55%). | — | — |
 
 ---
 
 ## Security
 
-Reviewed by reading the code and then by attacking the running app at
-`http://localhost:4079`. **This is the strongest part of the product** and none of it
-is on the critical path for the verdict.
+Reviewed by reading the code and re-attacking the running app. Unchanged in every
+material respect from the prior review, re-verified rather than re-asserted.
 
 | Surface | Finding |
 |---|---|
-| **XSS** | **Clean, and I tested it rather than asserting it.** No `dangerouslySetInnerHTML`, no `innerHTML`, no `eval`, no `new Function` anywhere in `src/`; `react/no-danger` is `'error'` in `eslint.config.js:47`. I injected `<img src=x onerror=alert(1)>` into `cost.partyTotal` in `localStorage` and reloaded: rendered as inert text, no `<img>` in the DOM, no dialog. QA independently drove the same payload through the basics and adjust forms. |
-| **Injection** | No SQL, no shell, no server, no query construction of any kind. Catalogue lookups are property reads on frozen literals. Nothing to inject into. |
-| **Stored data** | Exactly one key, `compass.session.v1`, 17.5 KB measured: a vibe, five basics fields, 3–5 multiple-choice answers, child ages, and a computed plan. No names, no email, no phone, no payment details, no location, no fingerprint. There is no account and no server log because there is no server. |
-| **Network** | **Zero requests after load** — architecturally, not by policy. Verified by QA's offline sweep (full flow to a copied itinerary with an empty `requestfailed` list) and enforced by `connect-src 'none'`. |
-| **CSP** | `default-src 'self'; connect-src 'none'; img-src 'self' data:` in `index.html` and in `dist/index.html`; `tests/csp.test.ts` asserts the shipped string byte for byte so the dev relaxation cannot leak. I served `dist/` under it and walked to the question screen: **zero violations, zero page errors.** Missing `frame-ancestors` and `base-uri` — no session, no auth, nothing to clickjack into, so this is hygiene not risk. One line. |
-| **Untrusted input into the engine** | `localStorage` is parsed field by field, never spread. `narrowAnswers` explicitly skips `__proto__`, `constructor` and `prototype`; the session is built into a fresh object literal, so prototype pollution has no path. **Partial gap:** `narrowPlan` validates ~14 fields then casts the whole object (D12). A tampered nested field crashes into the `ErrorBoundary` with a working Start over — self-inflicted denial of service only, no escalation, no data exposure. `int()` also accepts floats, zero and negatives, so a tampered `travellers: 0` renders "0 travellers" rather than being rejected. |
-| **Dependencies** | **Two runtime dependencies: `react`, `react-dom`. `npm audit --omit=dev`: 0 vulnerabilities.** Nothing else reaches a browser. This is the strongest supply-chain position available and it was defended through two refinement rounds. |
-| **Dev dependencies** | 5 advisories (1 critical, 1 high) in `vitest`/`vite`/`esbuild`/`launch-editor` — Vitest UI arbitrary file read, Vite dev-server path traversal, mostly Windows-specific. **None ships.** They are a developer-workstation and CI concern, not a user one. Bump vite/vitest at the next convenient moment; not gate-blocking. |
-| **Secrets** | **None, and nowhere to put one.** No API keys, no tokens, no `.env`, no config file with a credential shape. I grepped. |
-| **Consumer protection (R16)** | Non-dismissable provenance line on every priced screen; QA walked the accessibility tree on every screen and found zero elements named Book/Pay/Checkout/Reserve. Anita — the judge burned by a real ₹1.2L→₹2.1L booking — named the footer as the single thing that most lowered her guard. This requirement is doing real work. |
+| **XSS** | Clean. No `dangerouslySetInnerHTML`, `innerHTML`, `eval`, or `new Function` anywhere in `src/`; `react/no-danger` is `'error'`. QA's hostile-input sweeps (four rounds of them) drive `<img src=x onerror=alert(1)>` through every text-entry surface added since the last review (the R26 "Anywhere except…" field, the R24 child-age fields) with the same clean result. |
+| **Injection** | No SQL, no shell, no server, no query construction. Nothing to inject into. |
+| **Stored data** | One `localStorage` key, `compass.session.v1`, schema 2. No names, email, phone, payment details, location or fingerprint. Vibe, basics (now including child ages), 3–5 answers, exclusions, a pinned destination id, and a computed plan. |
+| **Network** | Zero requests after load, enforced by `connect-src 'none'` and re-verified by QA's offline sweep every round since round 1. |
+| **CSP** | `default-src 'self'; connect-src 'none'; img-src 'self' data:`, asserted byte-for-byte in `tests/csp.test.ts`. Still missing `frame-ancestors`/`base-uri` (hygiene, not risk — no session, nothing to clickjack into). |
+| **Untrusted input into the engine** | `localStorage` is parsed field-by-field; `__proto__`/`constructor`/`prototype` explicitly skipped in `narrowAnswers`. `narrowPlan`'s partial-cast gap (D5 above) is unchanged: a hand-tampered nested field still crashes into the `ErrorBoundary` rather than the vibe screen, self-inflicted denial of service only. |
+| **Dependencies** | Two runtime dependencies (`react`, `react-dom`). `npm audit --omit=dev`: 0 vulnerabilities, confirmed this session. |
+| **Secrets** | None, nowhere to put one. Grepped `src/` for anything credential-shaped; nothing found. |
+| **Consumer protection (R16)** | Non-dismissable provenance line on every priced screen, unchanged. QA's accessibility-tree sweep (repeated every round, including on the five new R27–R31 surfaces) continues to find zero elements named Book/Pay/Checkout/Reserve. This requirement is still doing real, measured work — it is the single most-cited thing in the customer panel's trust scores across three rounds of judges. |
 
 ---
 
 ## What I would do next with a week
 
-Ranked by what moves the verdict, then by what moves the panel score.
+Ranked by what a founder reading this review would actually want fixed first.
 
-1. **Make the relaxation banner true** *(0.5 day)* — bottleneck §2. Ship the cheap guard
-   plus the `restore.costDelta < 0` assertion immediately; do the search-based ladder
-   in the same change. This is first because it is the one defect that makes the
-   product actively dishonest, R16 is the product's whole differentiator, and it cost
-   the lowest score on the panel (Trust 4).
-2. **Give the scheduler enough to schedule, and stop mislabelling the gap** *(1.5 days)*
-   — bottleneck §1. Re-base invariant C3 onto `(destination × stay)` and let it fail;
-   fill or cap the six thin bases; split `FREE_DAY_NOTE` from the supply-shortfall
-   sentence; make R21 drop experiences rather than capacity. Closes B6 and B7, which is
-   the QA gate.
-3. **Add the vibe floor the architecture already specifies** *(2 hours)* — D1. One
-   `ConstraintSpec`, into `specs`, done. It closes Rohan's "Manali for a beach holiday"
-   and Kabir's 1/5-for-Party in a single change, and the banner it fires is a *feature*:
-   *"No beach trip fits, so we widened the search"* is exactly the honesty this product
-   sells. Best trust-per-hour in the list.
-4. **Make a restored plan a first-class state** *(0.5 day)* — D4 + D5. `forcedConstraints`
-   into `SessionState` and `PersistedSession` (schema 3), `changeNotice: null` in
-   `applyRestore`. Closes two of Kabir's three blockers and restores the invariant that
-   the screen is a function of the session.
-5. **Re-run the gates** *(0.5 day)*. `npm run e2e` must exit 0. Then close B1/B2/B8 —
-   B2 is a one-line copy decision that is mine to make: **change the heading to
-   "How long a flight? (long-haul is fine)"** rather than weaken UX8, because the word
-   is what QA is checking for and the heading is where a user looks.
-6. **Take back the performance I lost** *(0.5 day)* — bottleneck §3. Hoist `dates` and
-   weekday indices onto `PlanContext`; add a Vitest assertion that `generatePlanSet`
-   stays under 5 ms at 140 destinations, so §7's numbers stop being folklore.
-7. **Close the method gap** *(0.5 day)*. A second Playwright project against a static
-   `dist/` server, so the artefact we ship is the artefact we test. Then the S4s: the
-   `₹-9,640` sign, `overflow-wrap` on the plan ID, the 44×44 checkbox, the duplicated
-   `countLabel`.
+1. **Close the `applyRestore` change-notice gap** *(30 min)* — the one thing keeping
+   this at GO WITH RISK. It is a one-line fix with a working template two cases
+   above it, plus a regression test that finally exercises `requestRestore` →
+   `applyRestore` directly, which is the coverage gap that let it hide through two
+   PASS verdicts.
+2. **Audit every other "fixed in every case of a switch" claim in this codebase's
+   history against the actual case list** *(2 h)* — not because I found a second
+   instance, but because the process failure that produced D1 (verifying a claimed
+   blanket property against the specific scenarios a customer named, rather than
+   against the reducer's own enumeration) is exactly the kind of gap that produces a
+   second one quietly. `sessionReducer.ts` has 24 cases; I read all of them this
+   pass and found one gap. The next fix round should not have to.
+3. **Take back the performance trend** *(half a day)* — hoist the per-candidate date
+   array onto `PlanContext`. Cheap, well-understood, has been the correct
+   recommendation for two reviews running, and the number keeps getting worse as
+   correctness fixes land.
+4. **Close the `dist/`-under-CSP method gap** *(2 h)* — a second Playwright project
+   against a static build of `dist/`, so the artefact that ships is the artefact
+   that is tested, not one manually spot-checked by whoever happens to review it.
+5. **The small stuff** *(1 h total)* — dedupe `countLabel`, delete the two dead
+   exports, replace `qa-03:292`'s `test.skip` with a fixture guaranteed to produce a
+   Stretch case so the assertion cannot silently disarm.
 
-**Not in the week, and deliberately:** the `TravelDataSource` index split. It is the
-right fix for 100× and it is not the constraint today — 14 destinations is. Rohan's
-*"one of 1 destination in this catalogue"* and Kabir's *"₹1.5 lakh apart, no
-explanation"* are both catalogue-thinness symptoms, and content is cheaper than
-architecture here. The seam is built and it will still be there when it is needed;
-that was the point of building it.
+**Not in the week, still deliberately:** the `TravelDataSource` index split for
+100× catalogue growth. Fourteen destinations is still the binding constraint on
+trust (per every customer judge who has ever run this panel), not architecture, and
+the seam is built and waiting for the day content, not code, is the bottleneck.

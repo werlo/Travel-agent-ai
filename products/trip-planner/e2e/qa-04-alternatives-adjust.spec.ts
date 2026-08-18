@@ -76,7 +76,11 @@ test.describe('R11 / UX15 / UX16 — alternatives', () => {
   test('R11+UX15: a Saver is at least 10% below and a Stretch within budget × 1.25', async ({
     page,
   }) => {
-    await planBySkipping(page, 'Mountains')
+    // Round 3 (F2): the R25 vibe-affinity floor removed Manali & Solang as a
+    // Saver candidate for Mountains-skip, so that answer set no longer has a
+    // Saver card (see R11+UX15 'single empty slot' below). Honeymoon-skip still
+    // clears the floor with both cards present, so it is used here instead.
+    await planBySkipping(page, 'Honeymoon')
     const recommended = await planTotal(page)
 
     const saver = await altCard(page, 'saver')
@@ -135,7 +139,11 @@ test.describe('R11 / UX15 / UX16 — alternatives', () => {
   test('R11+UX16: Use this plan on the Saver moves destination, total, cost lines, budget line and plan ID together', async ({
     page,
   }) => {
-    await planBySkipping(page, 'Mountains')
+    // Round 3 (F2): the R25 vibe-affinity floor removed Manali & Solang as a
+    // Saver candidate for Mountains-skip, so that answer set no longer has a
+    // Saver card (see R11+UX15 'single empty slot' below). Honeymoon-skip still
+    // clears the floor with both cards present, so it is used here instead.
+    await planBySkipping(page, 'Honeymoon')
     const before = {
       destination: await destination(page),
       total: await planTotal(page),
@@ -176,7 +184,11 @@ test.describe('R11 / UX15 / UX16 — alternatives', () => {
   test('R11: the itinerary itself changes with the variant, not just the numbers', async ({
     page,
   }) => {
-    await planBySkipping(page, 'Mountains')
+    // Round 3 (F2): the R25 vibe-affinity floor removed Manali & Solang as a
+    // Saver candidate for Mountains-skip, so that answer set no longer has a
+    // Saver card (see R11+UX15 'single empty slot' below). Honeymoon-skip still
+    // clears the floor with both cards present, so it is used here instead.
+    await planBySkipping(page, 'Honeymoon')
     const daysBefore = await page.locator('.plan-section--days').innerText()
     const saver = await altCard(page, 'saver')
     await saver.getByRole('button', { name: 'Use this plan' }).click()
