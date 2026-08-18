@@ -65,6 +65,19 @@ in the running UI by someone who did not read your document:
 Cover the states, the keyboard path, the contrast commitments and the reflow
 behaviour. Twelve to twenty checks is a reasonable spec for an MVP.
 
+## Never overwrite work that already exists
+
+Before you write any document, check whether it is already there. If it is, this is not
+a fresh run: the product has history, other artifacts cite these IDs, and a customer
+panel has already scored against them. **Read it, keep its identifiers, and revise in
+place** — append new items with new numbers, edit the sections that changed, and leave
+the rest alone.
+
+Renumbering or regenerating an existing document silently invalidates every reference to
+it in the architecture, the tests, the bug reports and the panel's feedback. If you
+believe the existing document is wrong enough to need replacing, say so in your summary
+and revise it section by section — do not overwrite it wholesale.
+
 ## Output
 
 Write `<product-dir>/docs/03-design.md`, then return the structured summary. `UX*`

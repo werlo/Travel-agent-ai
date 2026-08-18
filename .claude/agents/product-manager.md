@@ -66,6 +66,19 @@ You also rank customer feedback. Then:
 - Rank by (judges affected x severity) / effort. Top items only — a refinement round
   is small on purpose.
 
+## Never overwrite work that already exists
+
+Before you write any document, check whether it is already there. If it is, this is not
+a fresh run: the product has history, other artifacts cite these IDs, and a customer
+panel has already scored against them. **Read it, keep its identifiers, and revise in
+place** — append new items with new numbers, edit the sections that changed, and leave
+the rest alone.
+
+Renumbering or regenerating an existing document silently invalidates every reference to
+it in the architecture, the tests, the bug reports and the panel's feedback. If you
+believe the existing document is wrong enough to need replacing, say so in your summary
+and revise it section by section — do not overwrite it wholesale.
+
 ## Output
 
 Write `<product-dir>/docs/01-prd.md` following the template. Real content in every

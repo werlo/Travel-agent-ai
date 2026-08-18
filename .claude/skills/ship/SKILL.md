@@ -49,9 +49,18 @@ and they can watch it with `/workflows`.
 
 ## 4. Run the pipeline
 
+**Launch by `scriptPath`, not by `name`.** The `name: 'ship-product'` registry is
+resolved once at session start, so any edit made to the workflow during the session is
+silently ignored — a run launched by name can execute a stale copy while you believe it
+is running your fix. Always pass:
+
+```
+scriptPath: '.claude/workflows/ship-product.js'
+```
+
 ```
 Workflow({
-  name: 'ship-product',
+  scriptPath: '.claude/workflows/ship-product.js',
   args: {
     slug, dir, url,                    // from new-product.sh
     idea,                              // the founder's verbatim text
