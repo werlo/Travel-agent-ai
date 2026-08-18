@@ -22,20 +22,19 @@ async function altCard(page: Page, variant: string) {
 }
 
 test.describe('R10 / UX14 — why this trip', () => {
-  test('UX14: the section is collapsed on first render', async ({ page }) => {
+  // UX14's "collapsed on first render" was overturned by R19 in refinement round
+  // 1: an accordion is where honesty goes to be ignored, so it opens by default.
+  test('R19 (supersedes UX14): the section is expanded on first render', async ({ page }) => {
     await planFor(page, 'Beach', BEACH_INDIA)
-    const summary = page.getByRole('group').filter({ hasText: 'Why this trip' }).first()
     const disclosure = page.locator('.why__summary')
-    await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.getByText('Because you said')).toBeHidden()
-    expect(await summary.count()).toBeGreaterThanOrEqual(0)
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByText('Because you said')).toBeVisible()
   })
 
   test('R10+UX14: expanding shows ≥3 reasons quoting the user, and a numbered rejection', async ({
     page,
   }) => {
     await planFor(page, 'Beach', BEACH_INDIA)
-    await page.locator('.why__summary').click()
     await expect(page.locator('.why__summary')).toHaveAttribute('aria-expanded', 'true')
 
     const reasons = await page.locator('[data-why="reasons"] li').allInnerTexts()
@@ -99,20 +98,34 @@ test.describe('R11 / UX15 / UX16 — alternatives', () => {
     await expect(stretch.getByRole('button', { name: 'Use this plan' })).toBeVisible()
   })
 
-  test('R11+UX15: an empty slot carries the literal sentence, never an empty box', async ({
+  test('R11+UX15: a single empty slot carries the literal sentence, never an empty box', async ({
     page,
   }) => {
-    // Beach + West coast + Empty + Local stays has neither alternative.
-    await planFor(page, 'Beach', BEACH_INDIA)
-    const saver = await altCard(page, 'saver-absent')
+    // Beach over Christmas has a Saver but no Stretch: exactly one absent slot.
+    await planBySkipping(page, 'Beach', { start: '20/12/2026', end: '27/12/2026' })
     const stretch = await altCard(page, 'stretch-absent')
-    await expect(saver).toBeVisible()
-    await expect(saver).toContainText('No cheaper option in this catalogue for these dates')
     await expect(stretch).toBeVisible()
     await expect(stretch).toContainText(
       'No pricier option that still stays inside your stretch band',
     )
-    expect((await saver.innerText()).trim().length).toBeGreaterThan(0)
+    expect((await stretch.innerText()).trim().length).toBeGreaterThan(0)
+  })
+
+  // R22 (refine round 1) supersedes UX15 for the both-absent case: two dashed boxes
+  // that do nothing are replaced by the one control that does.
+  test('R22 (supersedes UX15): with neither alternative, one reject control fills the space', async ({
+    page,
+  }) => {
+    await planFor(page, 'Beach', BEACH_INDIA)
+    await expect(page.locator('[data-alt="saver"], [data-alt="stretch"]')).toHaveCount(0)
+    await expect(page.locator('[data-alt="saver-absent"], [data-alt="stretch-absent"]')).toHaveCount(
+      0,
+    )
+    await expect(page.locator('.altcard')).toHaveCount(1)
+    await expect(page.locator('[data-alt="reject"]')).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Not this one — somewhere else' }),
+    ).toBeVisible()
   })
 
   test('R11+UX16: Use this plan on the Saver moves destination, total, cost lines, budget line and plan ID together', async ({
@@ -177,10 +190,10 @@ test.describe('R12 / UX17 — adjust and re-plan on the plan screen', () => {
     await expect(apply).toBeDisabled()
     await expect(page.getByText('Nothing has changed yet.')).toBeVisible()
 
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await expect(apply).toBeEnabled()
 
-    await page.getByLabel('Travellers', { exact: true }).fill('2')
+    await page.getByLabel('Adults', { exact: true }).fill('2')
     await expect(apply).toBeDisabled()
   })
 
@@ -195,9 +208,9 @@ test.describe('R12 / UX17 — adjust and re-plan on the plan screen', () => {
       summary: await page.locator('.summary-bar').innerText(),
     }
 
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByRole('button', { name: 'Update plan' }).click()
-    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 travellers')
+    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 adults')
 
     expect(await planTotal(page)).not.toBe(before.total)
     expect(await perPerson(page)).not.toBe(before.perPerson)
@@ -233,7 +246,7 @@ test.describe('R12 / UX17 — adjust and re-plan on the plan screen', () => {
     await planFor(page, 'Beach', BEACH_INDIA)
     const before = { id: await planId(page), total: await planTotal(page) }
 
-    await page.getByLabel('Travellers', { exact: true }).fill('13')
+    await page.getByLabel('Adults', { exact: true }).fill('13')
     await page.getByRole('button', { name: 'Update plan' }).click()
     await expect(page.getByText('Travellers must be between 1 and 12').first()).toBeVisible()
     expect(await planId(page)).toBe(before.id)
@@ -242,13 +255,13 @@ test.describe('R12 / UX17 — adjust and re-plan on the plan screen', () => {
 
   test('R12: double-clicking Update plan applies once', async ({ page }) => {
     await planFor(page, 'Beach', BEACH_INDIA)
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page
       .getByRole('button', { name: 'Update plan' })
       .click({ clickCount: 2, delay: 10 })
-    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 travellers')
+    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 adults')
     await expect(page.locator('.plan-hero__title')).toHaveCount(1)
-    await expect(page.getByLabel('Travellers', { exact: true })).toHaveValue('4')
+    await expect(page.getByLabel('Adults', { exact: true })).toHaveValue('4')
   })
 })
 

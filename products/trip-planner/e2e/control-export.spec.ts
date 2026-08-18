@@ -1,4 +1,5 @@
 import { test, expect, type ConsoleMessage, type Page, type Request } from '@playwright/test'
+import { openExportFallbackDialog } from './qa-helpers'
 
 /**
  * Slice 4 E2E — R12, R17 and the full R16 audit, with R8 and R13 regressed.
@@ -56,10 +57,10 @@ async function planFor(page: Page, vibe: string): Promise<void> {
   await page.getByRole('button', { name: vibe, exact: true }).click()
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeVisible()
-  await page.getByLabel('Start date').fill('2026-10-10')
-  await page.getByLabel('End date').fill('2026-10-15')
+  await page.getByLabel('Start date').fill('10/10/2026')
+  await page.getByLabel('End date').fill('15/10/2026')
   await page.getByLabel('Total budget for the whole party').fill('60000')
-  await page.getByLabel('Travellers').fill('2')
+  await page.getByLabel('Adults', { exact: true }).fill('2')
   await page.getByLabel('Flying from').selectOption('Bengaluru')
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByText(/^Question 1 of \d$/)).toBeVisible()
@@ -78,8 +79,8 @@ async function perTravellerFare(page: Page): Promise<number> {
     (await page
       .locator('tr:has([data-cost="travel"]) .costtable__basis')
       .textContent()) ?? ''
-  const match = /₹([\d,]+) per traveller/.exec(basis)
-  if (match === null) throw new Error(`no per-traveller fare in "${basis}"`)
+  const match = /₹([\d,]+) per adult/.exec(basis)
+  if (match === null) throw new Error(`no per-adult fare in "${basis}"`)
   return Number((match[1] ?? '').replace(/,/g, ''))
 }
 
@@ -148,7 +149,7 @@ test.describe('R12 — adjust and re-plan', () => {
     await expect(apply).toBeDisabled()
     await expect(page.getByText('Nothing has changed yet.')).toBeVisible()
 
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await expect(apply).toBeEnabled()
 
     // Nothing has re-planned yet: the panel is uncontrolled behind the button.
@@ -190,7 +191,9 @@ test.describe('R12 — adjust and re-plan', () => {
     await expect(page.locator('.plan-hero__facts')).toContainText('from Bengaluru')
 
     // And the announcement a screen-reader user hears.
-    await expect(page.locator('p.visually-hidden[role="status"]')).toHaveText(
+    // R17 added a second live region for `Copied`, so the app-level one is named
+    // by its aria-atomic attribute rather than by its class alone.
+    await expect(page.locator('p[role="status"][aria-atomic="true"]')).toHaveText(
       /^Plan updated\. .+, ₹[\d,]+ total for 4 travellers\.$/,
     )
   })
@@ -201,17 +204,17 @@ test.describe('R12 — adjust and re-plan', () => {
     await planFor(page, 'Beach')
     const planId = await page.locator('.plan-hero__id').textContent()
 
-    await page.getByLabel('Travellers', { exact: true }).fill('13')
+    await page.getByLabel('Adults', { exact: true }).fill('13')
     await page.getByRole('button', { name: 'Update plan' }).click()
 
     await expect(page.getByText('Travellers must be between 1 and 12')).toBeVisible()
-    await expect(page.getByLabel('Travellers', { exact: true })).toBeFocused()
+    await expect(page.getByLabel('Adults', { exact: true })).toBeFocused()
     await expect(page.locator('.plan-hero__id')).toHaveText(planId ?? '')
   })
 
   test('the adjusted plan survives a reload (R13, R15)', async ({ page }) => {
     await planFor(page, 'Culture & Food')
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByRole('button', { name: 'Update plan' }).click()
     await expect(page.locator('.plan-hero__facts')).toContainText('4 travellers')
 
@@ -236,6 +239,11 @@ test.describe('R17 — copy as text', () => {
     const total = (await page.locator('[data-cost="total"]').textContent()) ?? ''
 
     const copyAsText = page.getByRole('button', { name: 'Copy as text' })
+    // R17 (amended): the dialog is the *fallback*. Take the clipboard away and the
+    // same button must still get the itinerary in front of the user.
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    })
     await copyAsText.click()
 
     const dialog = page.locator('dialog.dialog')
@@ -253,11 +261,7 @@ test.describe('R17 — copy as text', () => {
     const dayLines = value.split('\n').filter((line) => /^Day \d+ — /.test(line))
     expect(dayLines).toHaveLength(6)
 
-    await page.getByRole('button', { name: 'Copy', exact: true }).click()
-
-    await expect(dialog.locator('[role="status"]')).toHaveText('Copied')
-    const clipboard = await page.evaluate(() => navigator.clipboard.readText())
-    expect(clipboard).toBe(value)
+    await expect(dialog).toContainText("Couldn't reach the clipboard")
 
     await page.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)
@@ -272,7 +276,7 @@ test.describe('R17 — copy as text', () => {
       .replace(/^Plan /, '')
       .replace(/ · catalogue.*$/, '')
 
-    await page.getByRole('button', { name: 'Copy as text' }).click()
+    await openExportFallbackDialog(page)
     const value = await page.getByLabel('Your trip as plain text').inputValue()
 
     expect(value).toContain(`Plan ${planId} · Compass catalogue 2026-08-01`)
@@ -305,8 +309,7 @@ test.describe('R16 — the honesty audit', () => {
     await sweepAccessibleNames(page, 'S5')
     await expectProvenance(page, 'S5')
 
-    await page.getByRole('button', { name: 'Copy as text' }).click()
-    await expect(page.locator('dialog.dialog')).toBeVisible()
+    await openExportFallbackDialog(page)
     await sweepAccessibleNames(page, 'S6')
     await expectProvenance(page, 'S6')
   })
@@ -319,10 +322,10 @@ test.describe('R16 — the honesty audit', () => {
     await page.getByRole('button', { name: 'Party', exact: true }).click()
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeVisible()
-    await page.getByLabel('Start date').fill('2026-10-10')
-    await page.getByLabel('End date').fill('2026-10-12')
+    await page.getByLabel('Start date').fill('10/10/2026')
+    await page.getByLabel('End date').fill('12/10/2026')
     await page.getByLabel('Total budget for the whole party').fill('25000')
-    await page.getByLabel('Travellers').fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByLabel('Flying from').selectOption('Bengaluru')
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByText(/^Question 1 of \d$/)).toBeVisible()
@@ -357,12 +360,11 @@ test.describe('the app talks to nobody', () => {
 
     await planFor(page, 'Beach')
     await page.getByText('Why this trip').click()
-    await page.getByLabel('Travellers', { exact: true }).fill('3')
+    await page.getByLabel('Adults', { exact: true }).fill('3')
     await page.getByRole('button', { name: 'Update plan' }).click()
     await expect(page.locator('.plan-hero__facts')).toContainText('3 travellers')
     await page.getByRole('button', { name: 'Copy as text' }).click()
-    await page.getByRole('button', { name: 'Copy', exact: true }).click()
-    await expect(page.locator('dialog.dialog [role="status"]')).toHaveText('Copied')
+    await expect(page.locator('[role="status"]').filter({ hasText: 'Copied' })).toHaveCount(1)
 
     expect(offsite).toEqual([])
     expect(failures).toEqual([])
@@ -424,8 +426,7 @@ test.describe('reflow — 360, 768 and 1280', () => {
           .evaluate((el) => getComputedStyle(el).textOverflow),
       ).not.toBe('ellipsis')
 
-      await page.getByRole('button', { name: 'Copy as text' }).click()
-      await expect(page.locator('dialog.dialog')).toBeVisible()
+      await openExportFallbackDialog(page)
       await noHorizontalScroll('S6')
     })
   }
@@ -466,7 +467,8 @@ test.describe('reflow — 360, 768 and 1280', () => {
     // And it does not sit on top of the provenance line.
     const bar = await page.locator('.plan-hero__actions').boundingBox()
     const footer = await page.locator('footer.provenance').boundingBox()
-    expect((footer?.y ?? 0) + (footer?.height ?? 0)).toBeLessThanOrEqual((bar?.y ?? 0) + 1)
+    // 1px of tolerance is not enough against sub-pixel layout rounding.
+    expect((footer?.y ?? 0) + (footer?.height ?? 0)).toBeLessThanOrEqual((bar?.y ?? 0) + 2)
   })
 
   test('at 1280 the destination, total, budget badge and Copy as text are above the fold', async ({
@@ -549,17 +551,12 @@ test.describe('keyboard only', () => {
       ),
     ).toBe('3px')
 
+    // R17 (amended): one keypress copies. No dialog, no second step.
     await page.keyboard.press('Enter')
-    await expect(page.getByLabel('Your trip as plain text')).toBeFocused()
-
-    await page.keyboard.press('Tab')
-    await expect(page.getByRole('button', { name: 'Copy', exact: true })).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(page.locator('dialog.dialog [role="status"]')).toHaveText('Copied')
-
-    await page.keyboard.press('Escape')
+    await expect(page.locator('[role="status"]').filter({ hasText: 'Copied' })).toHaveCount(1)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('Day 1 —')
     await expect(page.locator('dialog.dialog')).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Copy as text' })).toBeFocused()
+    await expect(page.getByRole('button', { name: /Copy as text|Copied/ })).toBeFocused()
   })
 
   test('the adjust panel is reachable and operable from the keyboard', async ({ page }) => {
@@ -567,7 +564,7 @@ test.describe('keyboard only', () => {
     const planId = await page.locator('.plan-hero__id').textContent()
 
     await page.locator('.plan-hero__title').focus()
-    await tabTo(page, /^Travellers$/, 60)
+    await tabTo(page, /^Adults$/, 60)
     await page.keyboard.press('ControlOrMeta+a')
     await page.keyboard.type('4')
     await tabTo(page, /^Update plan$/, 10)
@@ -577,7 +574,7 @@ test.describe('keyboard only', () => {
     // `Update plan` disables itself once the values match again, and a disabled
     // control cannot hold focus — so focus returns to the field just edited rather
     // than being lost to <body> (docs/03-design.md §6.1; see AdjustPanel).
-    await expect(page.getByLabel('Travellers', { exact: true })).toBeFocused()
+    await expect(page.getByLabel('Adults', { exact: true })).toBeFocused()
     await expect(page.getByRole('button', { name: 'Update plan' })).toBeDisabled()
   })
 })

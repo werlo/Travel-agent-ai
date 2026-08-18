@@ -455,3 +455,413 @@ Full acceptance criteria for every requirement named here are in `docs/01-prd.md
 | **Live, bookable prices.** | Rohan (condition of paying), implied by Anita | Requires a paid airline/hotel inventory API and a credential the build environment cannot hold, and would break the "no network calls, no external services" constraint the whole product is built under. R16 exists precisely so that nobody mistakes this catalogue for inventory. This is a founder-level decision about the product's future, not a refinement item — flagged in the readiness report, not fixed this round. |
 | **Show flight departure times / "no departure before 7am".** | Anita (smaller things) | The catalogue holds fares and durations, not schedules. Printing a departure time would be inventing a fact — exactly the failure that rank 1 exists to eliminate. Adding a real timetable is the same paid-inventory problem as live prices. Declined; the plan will keep showing duration only. |
 | **Put the per-unit bases into the copied text.** | Anita (smaller things) | The export is deliberately a 750-character message for WhatsApp and Slack, and Kabir — the judge who actually uses it that way — said "no notes". Growing it into a spreadsheet extract makes it worse at the job it does well. The bases stay on the plan page, where rank 5 now also puts the tax position. |
+
+---
+
+## Rohan Mehta — round 2
+
+**Product designer, 29, Bengaluru. Impatient Pragmatist. Tried this before; it didn't work for me.**
+
+**Goal:** "Oct 10–15, 2 people, ~₹60k all-in, from Bengaluru, somewhere with a beach — but not Goa, we did Goa last year. Tell me where and roughly what it costs, in five minutes."
+
+**Did I get it? Yes.** Destination and a total price in **4 clicks and 2 typed dates**, about 45 seconds. Last time I bounced. This time I didn't.
+
+### What actually happened
+
+1. **Landing.** Six vibe tiles. The line "We'll ask four quick questions — or skip them and we'll guess" is the single best thing on this page — it told me up front there was an exit. Clicked **Beach** → **Continue**. (2 clicks)
+2. **Your trip basics.** This is where I expected to rage-quit and instead I relaxed. It was *already* filled in with 5 nights, 2 travellers, from Bengaluru, ₹60,000. That is verbatim my trip. I changed two date fields and hit **Continue**. (3rd click)
+3. **Question 1 of 4.** "Plan my trip now" sitting right there next to Back. Clicked it. (4th click)
+4. **Plan.** *Kochi & Varkala · ₹56,600 total · ₹28,300 per person · ₹3,400 under your budget.* Day-by-day, flights, hotel, a cost breakdown I didn't ask for but could scan in three seconds.
+
+That's the job done. Under my six-click ceiling, no unskippable question, and the first plan was not Goa.
+
+**"Copy as text" is the feature I didn't know I wanted.** My actual workflow today ends with me typing a summary into WhatsApp for my partner. One click gave me a clean 15-line message with the days, the total and the split. That alone would make me come back.
+
+### Where I hesitated, and what annoyed me
+
+**"I clicked Beach. Where is the beach?"** Kochi & Varkala — six days of Chinese fishing nets, a spice market, a heritage walk, kathakali and a backwater canoe. Based in *Fort Kochi*. Varkala is in the title and appears nowhere in the plan. This is the one thing I asked for and the itinerary doesn't contain it. I'd read that and think the machine matched a label, not a holiday.
+
+**No way to say "not Goa".** Nowhere in the entire flow. I hit **Not this one — somewhere else** and the very first alternative it handed me was **North Goa**. It also sits in the "Stretch" card on the first plan. I had to work out for myself that going back and answering Q2 "East coast" was the way to dodge the west coast — and Q2's own subtitle literally reads "Konkan, **Goa**, Karnataka", so the app knows the word and still won't let me exclude it. That inference is more thinking than this product should ask of me.
+
+**The reroll forgets what I picked.** I kept clicking "somewhere else" out of curiosity:
+
+> Kochi → North Goa → Puducherry → Ella → **Manali & Solang** → **Gangtok & Pelling** → **Kathmandu & Pokhara** → Havelock → Bangkok
+
+By the fifth click it is offering me Himalayan hill stations for a **Beach** trip. That's the moment I stopped trusting the recommendations — if it'll offer Manali to someone who clicked Beach, then the first answer being good was luck. (The "You turned these down / Put X back" list is genuinely nice, though.)
+
+**"one of 1 destination in this catalogue".** Once I did answer the questions, "Why this trip" told me East coast narrowed things to exactly one option. I wasn't going to read that box, but it's open by default so I did, and it made the catalogue feel thin.
+
+### What worked without me thinking about it
+
+- Stretching to the 16th in "Adjust and re-plan" re-priced instantly (Puducherry, 6 nights, ₹49,400) without re-asking anything. Exactly right.
+- The breakdown adds up, GST is stated as included, per-person is spelled out. I believe the arithmetic.
+- Everything loaded instantly. No spinners I noticed at human speed.
+- Clean, quiet, readable. Nothing shouted at me, no popup asking for my email.
+
+### Verbatim
+
+- "Oh — it already knows it's two of us from Bangalore on 60k. Fine, I'll play."
+- "'Plan my trip now'. Thank you. Genuinely, thank you."
+- "₹56,600 and it's under budget. That's my answer, I can leave."
+- "Hang on, I said *beach*. This is a spice market and a puppet show."
+- "First alternative is North Goa. That's the one place I told you — well. I didn't tell you. There was nowhere to tell you."
+- "It's offering me Manali. For a beach holiday. Okay, so it's just cycling a list."
+- "I still have to go to MakeMyTrip to actually book this, so this is a shortlist tool, not a booking tool. Which is fine — that's the part I hate anyway."
+
+### Blockers
+
+None that stopped me getting an answer. The reroll-ignores-vibe and no-exclusion issues are trust damage, not blockers.
+
+### Scores (against Google + MakeMyTrip + WhatsApp-ing a friend, which is what I do today)
+
+| | |
+|---|---|
+| First-run clarity | 8 |
+| Task success | 8 |
+| Speed | 9 |
+| Visual quality | 8 |
+| Trust | 6 |
+| **Overall** | **7** |
+
+### Top three fixes
+
+1. **Let me rule a place out in one gesture.** A "not there" or "somewhere else, but not X" on the plan itself. My hardest constraint is currently unspeakable, and the reroll walked straight into it.
+2. **Make the plan deliver the vibe I clicked.** If I pick Beach, every day of the itinerary and every reroll should stay on a beach. Kochi with no beach day, and Manali on reroll five, both break the one promise the landing page made.
+3. **Say what the destination actually is before I read six days.** One line under the title — "backwaters and colonial old town, beaches an hour out" — would have saved me the whole "where is the beach" moment.
+
+### Would I use it again? Would I pay?
+
+**Use again: yes.** For "we have five days, where do we go" this beats twenty minutes of Google and a MakeMyTrip form. I'd send the copied text to my partner and then go book it elsewhere.
+
+**Pay: no, not as a subscription.** It's a two-minutes-every-four-months tool. I'd use it free, and I'd happily click through to a booking partner from it. The only version I'd pay for — maybe ₹200–300 one-off per trip — is one where the price is real and bookable, and right now the footer tells me it isn't.
+
+## Anita Fernandes — round 2
+
+**Who I am:** 47, chartered accountant, Mumbai. Last year I booked a "₹1.2 lakh family
+package" that landed at ₹2.1 lakh once taxes, transfers and a peak-season supplement
+appeared. Today I keep a spreadsheet of quotes from two local agents and cross-check
+every line against Booking.com. I tried this thing before and it did not work for me.
+I came back assuming nothing had been fixed.
+
+**What I wanted:** One complete number for four people over Christmas week, flights in,
+and a breakdown I can audit. If the number moved on reload, or I couldn't source a
+figure, I was leaving.
+
+**Did I get it?** Yes. ₹2,70,855 total, ₹67,700 per person, Havelock & Neil, Andaman,
+20–27 Dec 2026, from Mumbai. About twelve minutes end to end, most of it me trying to
+catch it out.
+
+### What happened
+
+Landing page offered six vibes. I picked **Peace & Quiet** — the copy said "Nobody
+around, nothing scheduled", which is the whole point of this holiday. The footer already
+said *"Compass does not sell or reserve anything"*. That line did more for my blood
+pressure than anything else on the page. Last year's site let me believe I was booking.
+
+**Your trip basics** put everything on one screen instead of dribbling it out. I typed
+20/12/2026–27/12/2026, ₹2,50,000, 2 adults, 2 children, Mumbai. The moment I typed 2 in
+Children, **Child 1 age / Child 2 age** appeared. I did not expect that. Every quote
+form I use makes me phone the agent to explain that one of them is twelve. Under the
+Children box it already said *"A traveller aged 12 or over is priced as an adult."* So I
+knew before I saw a single rupee that my twelve-year-old was going to cost me a full
+fare. Fine. Tell me up front and I have no argument.
+
+Four questions — India or international, beaches or hills, how empty, resort or local.
+Twenty seconds. Then the plan.
+
+### The audit
+
+This is the part I actually care about, so I did it properly.
+
+| Line | As stated | My arithmetic |
+|---|---|---|
+| Travel | ₹26,000 × 3 adults + ₹19,500 × 1 child | 97,500 ✓ |
+| Stay | 7 nights × 2 rooms × ₹3,200 | 44,800 ✓ |
+| Experiences | ₹9,700 × 3 + ₹4,850 × 1 | 33,950 ✓ |
+| Local allowance | ₹1,400 × 4 people × 8 days | 44,800 ✓ |
+| Season | +35% on (stay + travel) = 35% × 142,300 | 49,805 ✓ |
+| **Total** | | **2,70,855 ✓** |
+| Per person | 2,70,855 ÷ 4, rounded to nearest ₹100 | 67,713.75 → 67,700 ✓ |
+
+Every line ties. To the rupee. I also counted the eleven experiences down the itinerary
+and added the paid ones — 3,500 + 400 + 800 + 1,200 + 1,600 + 2,200 = ₹9,700, exactly
+the per-adult experiences figure. Nothing is hiding in a bucket.
+
+And it told me what "per person" means instead of leaving me to guess. *"₹2,70,855 ÷ 4,
+rounded to the nearest ₹100."* That single line is why I did not close the tab. On my
+agents' quotes "per person" has meant per adult, per adult sharing, and per adult
+sharing excluding flights, all in the same week.
+
+**Determinism.** I ran the identical flow three times and reloaded the plan page each
+time. ₹2,70,855 every time. The plan even carries an ID — `HAVE-7N-4P-B250-d1te` — and a
+catalogue date. I can put that in my spreadsheet and quote it back.
+
+**Copy as text** gave me a clean paste with the total, the day list, the five component
+figures and the plan ID, and it matched the screen exactly. That goes straight into my
+sheet next to the two agent quotes. This is the single most useful button on the site.
+
+**Alternates hold their price.** The Stretch card advertised Puducherry at ₹2,72,688; I
+clicked through and got ₹2,72,688. Breakdown re-derived correctly for the new
+destination (44,250 + 1,26,000 + 10,850 + 32,000 + 59,588 = 2,72,688 ✓). No bait.
+
+**Considered and rejected** — Maldives, Bali, Dubai, each with how far over budget. That
+is the list my agent never shows me because she only sends what she earns on.
+
+### Where I stopped and frowned
+
+**1. The peak-season loading is all-or-nothing, and the label doesn't say so.** The line
+reads *"Peak season (25 Dec – 2 Jan): +35% on stay and travel."* My trip is 20–27 Dec.
+Two of my seven nights fall in that window. I am being charged 35% on all seven nights
+and on the outbound flight of 20 December, which is nowhere near peak. I tested it: 13–20
+Dec gives ₹0 season, 24–31 Dec gives ₹49,805, and my 20–27 Dec gives the identical
+₹49,805 as a trip sitting entirely inside the window. So it is a switch, not a
+calculation. It is disclosed and I can reproduce it, which is why I didn't leave — but
+the wording implies a date range applied to dates, and it isn't. This is precisely the
+shape of the supplement that cost me ₹90,000 last year. Either prorate it, or say
+"any trip touching 25 Dec – 2 Jan carries +35% on the whole stay and travel."
+
+> "Two nights in the window and you're loading my twentieth of December flight by
+> thirty-five percent? Say that out loud on the line, then."
+
+**2. The header says two children; the price says three adults.** The bar reads
+"4 travellers (2 adults, 2 children)" and the total says "Total for 2 adults and 2
+children" — while sitting directly above "₹26,000 per adult × 3". Both are true under the
+stated 12+ rule, and the rule is printed. But you have the same trip described two
+different ways within four centimetres of each other. Make the summary say
+"3 charged as adults, 1 as a child" and the tension disappears.
+
+**3. "Per traveller" in the itinerary means something different from "per traveller" in
+the breakdown.** Day 1 says "Fly Mumbai → Havelock · ₹13,000 per traveller". My nine-year
+old is not ₹13,000, she is ₹9,750 — as the breakdown correctly shows. Two definitions of
+the same phrase on one page is exactly the trap I came here worried about. It's mild
+because the correct figure is right there in the panel, but fix the word.
+
+**4. A stale banner that names the wrong destination.** After I clicked through to
+Puducherry, the page title said "Puducherry & Auroville", the total said ₹2,72,688 —
+and the amber banner underneath still read *"you asked for resort comfort — nothing fits
+₹2,50,000 for 4, so this is Havelock & Neil, Andaman."* Meanwhile "Why this trip" on the
+same page said "Serenity Beach House **is** the resort-comfort choice in Puducherry."
+The banner contradicts the reasoning section and names a place I'm not looking at. For
+about ten seconds I genuinely did not know which trip I was being quoted.
+
+> "Which one am I buying? The heading and the yellow box don't agree."
+
+**5. I asked for no 3am flight and there is nowhere to say it.** Four questions, a full
+basics form, an adjust panel — and not one field for departure time. The itinerary gives
+me "5h 24m in the air" and no clock time anywhere on the page. So on the one comfort
+question that matters when you're flying with a nine-year-old, I have learned nothing
+and I still have to ring the agent.
+
+**6. The re-plan panel can change adults but not children.** It has start, end, adults,
+budget, origin. If I want to price the same trip with my sister's kids added I have to
+start over.
+
+**7. Cosmetic but it looked wrong:** the Andaman itinerary puts "Mangrove kayak after
+dark" on Day 8, after check-out and alongside the flight home. Nobody does a night kayak
+on the morning they fly out.
+
+### Compared to what I do today
+
+My spreadsheet has two agent quotes that arrive as PDFs with "Package cost ₹1,45,000*"
+and an asterisk pointing at nothing. Neither agent will tell me the room-night rate.
+Neither will tell me what they rejected. This gave me a total, five components, the
+per-person arithmetic, the child rule, a stable plan ID and a paste-ready export in
+twelve minutes. On transparency it is not close — this wins.
+
+What it is not is bookable, and it does not pretend to be. Because it says so plainly,
+I'd use it as the challenge document I take to my agent, which is worth real money to me
+even though it's sample data.
+
+### Would I use it again? Would I pay?
+
+Yes, again — as a negotiating instrument. I'd walk in with the printed breakdown and ask
+why their Havelock quote is ₹3.4 lakh when a room-night is ₹3,200.
+
+Paying: not for sample data. Wire it to live inventory and give me a plan I can hand to
+an agent and I'd pay **₹500 a trip, or ₹2,000 a year** for the household. I'd pay it for
+the breakdown and the export, not for the destination suggestions — I can pick a place
+myself; what I cannot do is get anyone to itemise.
+
+### Scores
+
+| | |
+|---|---|
+| First-run clarity | 8 |
+| Task success | 8 |
+| Speed | 9 |
+| Visual quality | 8 |
+| Trust | 7 |
+| **Overall** | **8** |
+
+Trust is the one I'd hold back on, and it's held back by four things and not by the
+arithmetic: the season loading that isn't prorated, the banner that names the wrong
+destination, "per traveller" meaning two things, and the adults/children label
+mismatch. The maths itself is the most honest I have seen from anyone selling travel.
+
+### Top three fixes
+
+1. **Make the seasonal loading say what it actually does, or make it do what it says.**
+   Right now a trip with two nights in the peak window pays exactly what a trip with
+   seven does, under a label that reads like a date range. This is the one line on the
+   page that could still cost me ₹50,000 I didn't expect.
+2. **One plan, one story.** When I switch to an alternate, every explanation on the page
+   must be about the plan I am looking at. A banner naming a different destination beside
+   a different total is the fastest way to lose someone like me.
+3. **Let me say when I can fly, and show me the times.** Not a preference toggle buried
+   somewhere — I want to see the departure on the itinerary. A number I can't fly at
+   3am for is not a number I can use.
+
+
+## Kabir Sandhu — round 2
+
+Design studio owner, Delhi, nine people, annual offsite. Round 1 didn't work for me.
+What I brought: 9 travellers, 13–16 Nov, ₹4,50,000, from Delhi, Party *and* Peace &
+Quiet, and a plan to change 9 → 7 → 12 to see what breaks. Today I use a Google Sheet
+with a tab per destination and a WhatsApp group that argues for two weeks.
+
+**Did I get what I came for? Partly. About 25 minutes.** I have a plan I would paste
+into Slack. I do not fully trust the numbers in it, and that is the problem.
+
+### What happened
+
+**Vibe screen.** Six cards, clean, obvious. I clicked Party, then Peace & Quiet — it
+deselected Party. Single-select. My trip is genuinely both: one big night out and one
+day where nobody does anything. There is nowhere to say that. I went with Party and
+hoped the questions would let me add the quiet part. They didn't.
+
+**Trip basics.** One page, all four fields prefilled, sensible. Best screen in the
+product. Filled 13/11/2026–16/11/2026, ₹450000, 9 adults, Delhi. The chip at the top
+("3 nights · 9 travellers · from Delhi · ₹4,50,000") stayed with me the whole way,
+which I liked.
+
+**Four questions.** Within India → A city → A proper city night → Local stays. Fast,
+branching, no dead ends. Notably it never asked me anything about pace or downtime —
+the thing I actually needed.
+
+**The plan.** Puducherry & Auroville, ₹2,49,900. With an amber banner: *"No city
+nightlife party trip fits ₹4,50,000 for 9 — we included the coast."* And directly
+underneath: *"₹2,00,100 under your budget."*
+
+> "Hang on. You're telling me nothing fits ₹4.5 lakh, and in the same breath you're
+> handing me something two lakh under it. Which is it?"
+
+Then the itinerary: Goubert market, White Town at first light, the Matrimandir, and
+the Sri Aurobindo ashram — *ten minutes of complete silence*. For nine designers on a
+Party offsite. I would be laughed out of the studio.
+
+**"Put city nightlife back".** I clicked it out of irritation. It said: *"The cheapest
+city nightlife party trip for 9 over these dates is ₹2,34,300 — ₹2,15,700 under your
+budget."* So the city nightlife trip exists, fits, **and is cheaper than the one it
+just gave me.** The banner was flatly wrong and the product disproved itself in one
+click.
+
+> "So it lied to me. Not maliciously, but it lied, and I only caught it because I was
+> annoyed enough to click. My WhatsApp group would have argued about Puducherry for a
+> week off the back of that sentence."
+
+**North Goa.** Now it's right. "A night out in Anjuna — the one properly late night,
+with a taxi arranged in advance." Chapora fort, Fontainhas, dolphin boat. And it told
+me *"Not scheduled: Anjuna flea market — runs Wednesdays only, and your dates have no
+Wednesday."* That is exactly the honesty I want and my Sheet never gives me.
+
+But the amber note under the ₹1,76,100 headline still read *"destination is now
+Puducherry & Auroville instead of North Goa … so this is Puducherry & Auroville"* on a
+page whose H1 says **North Goa**. Stale text sitting directly under the price.
+
+**9 → 7 (the test I came to run).** Changed Adults to 7 in "Adjust and re-plan",
+ticked "Leave one day free", hit Update. It did **not** re-ask the questions — that
+part passes, and it's the thing that made me leave last time. But it silently threw
+away my North Goa override and dropped me back into Puducherry, with the same false
+"nothing fits ₹4,50,000 for 7" banner — even more absurd, because it's *fewer people
+and less money.* I had to click "Put city nightlife back" → "Use the plan" all over
+again.
+
+> "Wait — where did my Goa go? I changed one number. I didn't ask you to redecide the
+> whole trip."
+
+If I hadn't been watching, I'd have pasted a Puducherry ashram itinerary into Slack
+under the heading "offsite".
+
+**Leave one day free.** Works, visibly: *"Day 2 · Sat 14 Nov — Nothing scheduled, this
+day is yours."* And then honestly: *"Not scheduled: Saturday night market, Arpora —
+runs Saturdays only, and there was no room on your Saturday."* Good. But it picked
+Saturday, my one big evening, and never asked which day I wanted free.
+
+**Copy as text.** The best thing in the product. Fourteen lines, destination, dates,
+headcount, total, per person, day-by-day, room count, cost split, the two caveats, a
+plan ID. That is a Slack message. That replaces three tabs of my Sheet.
+
+**12 people, International, ₹4,50,000 (the trap).** It gave me Ella & the south coast
+at ₹4,29,600 and — at the bottom, in small text — *"Dubai — ₹1,56,000 over your budget
+for 12. Phuket & Phi Phi — ₹1,20,000 over. Bali — ₹1,93,200 over."* It did not lie. It
+told me the exact gap. Credit where due. But it never said it up top, and it quietly
+handed me a destination rated **1 out of 5 for Party** without a banner saying "your
+budget cannot buy an international party trip for twelve".
+
+**₹50,000 for 12 (the impossible one).** No "no results". *"Nothing in this catalogue
+fits ₹50,000 — the closest is ₹1,84,800."* Manali, and it noted the shortfall. Exactly
+right. This alone is better than every booking site I use.
+
+**"Not this one — somewhere else."** Cycled North Goa → Manali → Kochi → Gangtok, kept
+a "You turned these down" list with put-back. Good. But North Goa came back at
+₹3,82,800 here, versus ₹2,34,300 via the other route. Same destination, ₹1.5 lakh
+apart, no explanation anywhere. That is a fresh two-week WhatsApp argument.
+
+### Where I hesitated
+
+- Vibe screen: five seconds trying to select a second card before accepting I couldn't.
+- The "nothing fits / ₹2,00,100 under budget" contradiction — I stopped and re-read it
+  three times.
+- After Update plan, working out whether the destination had changed on purpose.
+- ₹2.7 lakh under budget with nine people. There is no way to say "use my money" —
+  no upgrade the stay, no add a nicer dinner. Under budget reads as a win to the
+  product and as a failure to me.
+
+### Blockers
+
+1. Changing the headcount silently discards a destination I explicitly chose. It
+   doesn't re-ask the questions — but it re-decides the answer, which is worse,
+   because I don't notice.
+2. The budget banners state things that are not true. "No city nightlife party trip
+   fits ₹4,50,000 for 9" when a cheaper one exists is the one sentence that costs the
+   product its credibility, and it's above the fold.
+3. Stale text: an amber note naming Puducherry sits under a North Goa headline.
+
+### Verbatim
+
+> "You're telling me nothing fits ₹4.5 lakh and handing me something two lakh under it."
+> "It disproved itself in one click. That's the bit I can't unsee."
+> "Wait — where did my Goa go? I changed one number."
+> "The Slack paste is genuinely great. I'd use the product for that alone if I could
+> trust the number at the top of it."
+> "Nine designers, one ashram, ten minutes of complete silence. No."
+
+### Scores
+
+| | |
+|---|---|
+| First-run clarity | 8 |
+| Task success | 6 |
+| Speed | 8 |
+| Visual quality | 8 |
+| Trust | 4 |
+| **Overall** | **6** |
+
+### Top three fixes
+
+1. **Never tell me something doesn't fit when it does.** Every "nothing fits ₹X for N"
+   line must be true at the moment it's rendered, and if a cheaper option exists that
+   matches what I asked for, show me that first instead of the banner.
+2. **A choice I made by hand survives a headcount change.** If re-pricing forces a
+   different destination, say so loudly and offer one click back — don't silently
+   revert to the machine's pick.
+3. **Let me spend the budget I gave you.** ₹2.7 lakh under is not a win for an offsite.
+   Offer the better stay, and let me hold two vibes at once — one loud night, one dead
+   day — because that is what every group trip actually is.
+
+**Would I use it again?** Yes, for the Copy-as-text alone — but I'd sanity-check every
+banner, which is the exact work I came here to stop doing.
+
+**Would I pay?** ₹1,000 one-off per trip, or ~₹2,500/year for the studio. Not more
+while it's a sample catalogue that doesn't book anything, and not at all until the
+budget lines stop contradicting themselves.

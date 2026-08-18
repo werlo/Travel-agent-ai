@@ -39,10 +39,10 @@ async function planFor(
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeVisible()
 
-  await page.getByLabel('Start date').fill(trip.startDate ?? '2026-10-10')
-  await page.getByLabel('End date').fill(trip.endDate ?? '2026-10-15')
+  await page.getByLabel('Start date').fill(trip.startDate ?? '10/10/2026')
+  await page.getByLabel('End date').fill(trip.endDate ?? '15/10/2026')
   await page.getByLabel('Total budget for the whole party').fill(trip.budget ?? '60000')
-  await page.getByLabel('Travellers').fill(trip.travellers ?? '2')
+  await page.getByLabel('Adults', { exact: true }).fill(trip.travellers ?? '2')
   await page.getByLabel('Flying from').selectOption('Bengaluru')
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByText(/^Question 1 of \d$/)).toBeVisible()
@@ -81,8 +81,8 @@ test.describe('R10 — why this trip', () => {
     await planFor(page, 'Beach', ['Within India', 'West coast', 'Empty', 'Local stays'])
 
     const summary = page.getByText('Why this trip')
-    await expect(summary).toHaveAttribute('aria-expanded', 'false')
-    await summary.click()
+    // R19 (refine round 1) supersedes the original "collapsed first" rule: the
+    // section is expanded on first render, without a click.
     await expect(summary).toHaveAttribute('aria-expanded', 'true')
 
     const reasons = page.locator('[data-why="reasons"] li')
@@ -155,20 +155,21 @@ test.describe('R11 — the alternatives', () => {
   })
 
   test('an empty slot carries the sentence, never an empty box', async ({ page }) => {
-    await planFor(page, 'Beach', ['Within India', 'West coast', 'Empty', 'Local stays'])
+    // R22 replaced the both-absent case with a single working control, so the
+    // sentence is now asserted on a plan with exactly one absent slot.
+    await planFor(page, 'Beach', [], { startDate: '20/12/2026', endDate: '27/12/2026' })
 
-    await expect(page.locator('[data-alt="saver"]')).toHaveCount(0)
-    const slot = page.locator('[data-alt="saver-absent"]')
+    const slot = page.locator('[data-alt="stretch-absent"]')
     await expect(slot).toBeVisible()
-    await expect(slot).toContainText('No cheaper option in this catalogue for these dates')
+    await expect(slot).toContainText('No pricier option that still stays inside your stretch band')
     await expect(slot.locator('button')).toHaveCount(0)
   })
 })
 
 test.describe('R14 — the relaxation banner', () => {
   const deadEnd: Trip = {
-    startDate: '2026-10-10',
-    endDate: '2026-10-12',
+    startDate: '10/10/2026',
+    endDate: '12/10/2026',
     budget: '25000',
     travellers: '4',
   }

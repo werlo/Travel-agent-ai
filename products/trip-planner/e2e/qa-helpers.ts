@@ -11,11 +11,15 @@ export const REFERENCE_SUMMARY = '5 nights · 2 travellers · from Bengaluru · 
 export const SNAPSHOT_DATE = '2026-08-01'
 
 export interface Basics {
+  /** DD/MM/YYYY — the only format the fields read or write (R12). */
   start?: string
   end?: string
   budget?: string
+  /** Adults. The field is labelled `Adults` since R24 split the party. */
   travellers?: string
   origin?: string
+  /** R24 — one age per child, in years. */
+  childAges?: string[]
 }
 
 export function watchConsole(page: Page): { errors: string[]; warnings: string[] } {
@@ -46,11 +50,18 @@ export async function pickVibe(page: Page, vibe = 'Beach'): Promise<void> {
 }
 
 export async function fillBasics(page: Page, basics: Basics = {}): Promise<void> {
-  await page.getByLabel('Start date').fill(basics.start ?? '2026-10-10')
-  await page.getByLabel('End date').fill(basics.end ?? '2026-10-15')
+  await page.getByLabel('Start date').fill(basics.start ?? '10/10/2026')
+  await page.getByLabel('End date').fill(basics.end ?? '15/10/2026')
   await page.getByLabel('Total budget for the whole party').fill(basics.budget ?? '60000')
-  await page.getByLabel('Travellers').fill(basics.travellers ?? '2')
+  await page.getByLabel('Adults', { exact: true }).fill(basics.travellers ?? '2')
   await page.getByLabel('Flying from').selectOption(basics.origin ?? 'Bengaluru')
+  const ages = basics.childAges ?? []
+  if (ages.length > 0) {
+    await page.getByLabel('Children', { exact: true }).fill(String(ages.length))
+    for (let i = 0; i < ages.length; i += 1) {
+      await page.getByLabel(`Child ${i + 1} age`).fill(ages[i]!)
+    }
+  }
 }
 
 /** Cold load → vibe → basics filled → first adaptive question on screen. */
@@ -120,10 +131,13 @@ export async function planBySkipping(
   await waitForPlan(page)
 }
 
+/** Reads `₹58,000`, `₹-9,640` and `−₹9,640` alike — R23 added signed amounts. */
 export function rupees(text: string): number {
-  const m = text.match(/₹\s?([\d,]+)/)
+  const m = text.match(/(−|-)?\s?₹\s?(−|-)?\s?([\d,]+)/)
   if (m === null) throw new Error(`no rupee figure in ${JSON.stringify(text)}`)
-  return Number(m[1]!.replace(/,/g, ''))
+  const negative = m[1] !== undefined || m[2] !== undefined
+  const value = Number(m[3]!.replace(/,/g, ''))
+  return negative ? -value : value
 }
 
 export async function planTotal(page: Page): Promise<number> {
@@ -203,4 +217,18 @@ export async function hasHorizontalScroll(page: Page): Promise<boolean> {
   return page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
   )
+}
+
+/**
+ * R17 (amended in refinement round 1) — `Copy as text` writes to the clipboard in
+ * the same click, and the read-only dialog is now only the *fallback* for a browser
+ * that refuses clipboard access. Tests that need to see the dialog therefore have
+ * to take the clipboard away first; that is what this does.
+ */
+export async function openExportFallbackDialog(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+  })
+  await page.getByRole('button', { name: /Copy as text/ }).click()
+  await expect(page.locator('.dialog__panel')).toBeVisible()
 }

@@ -110,7 +110,7 @@ test.describe('R2 / UX4 — trip basics', () => {
     await fillBasics(page)
     await expect(page.locator('.summary-bar')).toHaveText(REFERENCE_SUMMARY)
 
-    await page.getByLabel('Travellers').fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await expect(page.locator('.summary-bar')).toHaveText(
       '5 nights · 4 travellers · from Bengaluru · ₹60,000',
     )
@@ -133,7 +133,7 @@ test.describe('R3 / UX5 / UX6 — invalid basics are rejected inline', () => {
     await startFresh(page)
     await pickVibe(page, 'Beach')
     await fillBasics(page)
-    await page.getByLabel('End date').fill('2026-10-09')
+    await page.getByLabel('End date').fill('09/10/2026')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
 
     const end = page.getByLabel('End date')

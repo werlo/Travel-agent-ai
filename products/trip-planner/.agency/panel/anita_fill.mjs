@@ -1,0 +1,18 @@
+export async function fill(p, opts = {}) {
+  await p.goto('http://localhost:4079')
+  await p.waitForTimeout(500)
+  await p.getByText('Peace & Quiet').click()
+  await p.getByRole('button', { name: /Continue/i }).click()
+  await p.waitForTimeout(400)
+  await p.fill('#field-startDate', '20/12/2026')
+  await p.fill('#field-endDate', '27/12/2026')
+  await p.fill('#field-budget', '250000')
+  await p.fill('#field-travellers', '2')
+  await p.fill('#field-children', '2')
+  await p.waitForTimeout(200)
+  const ages = p.locator('input').filter({ hasNot: p.locator('#field-budget') })
+  await p.getByLabel('Child 1 age').fill('9')
+  await p.getByLabel('Child 2 age').fill('12')
+  await p.selectOption('#field-origin', 'Mumbai')
+  await p.waitForTimeout(300)
+}

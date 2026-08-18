@@ -4,6 +4,7 @@ import {
   assertNothingTransactional,
   assertProvenance,
   destination,
+  openExportFallbackDialog,
   planBySkipping,
   planFor,
   planId,
@@ -22,8 +23,8 @@ const BEACH_INDIA = ['Within India', 'West coast', 'Empty', 'Local stays']
 /** The R14 dead-end case: International + Party + 2 nights + ₹25,000 for 4. */
 async function deadEndCase(page: import('@playwright/test').Page): Promise<void> {
   await toQuestions(page, 'Party', {
-    start: '2026-10-10',
-    end: '2026-10-12',
+    start: '10/10/2026',
+    end: '12/10/2026',
     budget: '25000',
     travellers: '4',
   })
@@ -263,7 +264,7 @@ test.describe('R16 / UX3 — provenance and no booking', () => {
 
   test('R16+UX3: the export dialog is also free of transactional names', async ({ page }) => {
     await planFor(page, 'Beach', BEACH_INDIA)
-    await page.getByRole('button', { name: /Copy as text/ }).click()
+    await openExportFallbackDialog(page)
     await expect(page.getByRole('heading', { name: 'Copy your trip' })).toBeVisible()
     await assertNothingTransactional(page)
   })
@@ -284,7 +285,7 @@ test.describe('R17 / UX19 — export the itinerary as plain text', () => {
     const dest = await destination(page)
     const total = await page.locator('.plan-hero__total').innerText()
 
-    await page.getByRole('button', { name: /Copy as text/ }).click()
+    await openExportFallbackDialog(page)
     await expect(page.getByRole('heading', { name: 'Copy your trip' })).toBeVisible()
 
     const textarea = page.locator('#export-text')
@@ -302,10 +303,11 @@ test.describe('R17 / UX19 — export the itinerary as plain text', () => {
     }
   })
 
-  test('R17+UX19: Copy announces "Copied" in a role="status" region', async ({ page }) => {
+  test('R17 (amended): one click on Copy as text announces "Copied" in a role="status" region', async ({
+    page,
+  }) => {
     await planFor(page, 'Beach', BEACH_INDIA)
     await page.getByRole('button', { name: /Copy as text/ }).click()
-    await page.getByRole('button', { name: 'Copy', exact: true }).click()
 
     const statuses = page.locator('[role="status"]')
     await expect
@@ -316,7 +318,7 @@ test.describe('R17 / UX19 — export the itinerary as plain text', () => {
   test('R17+UX19: Esc closes the dialog and returns focus to Copy as text', async ({ page }) => {
     await planFor(page, 'Beach', BEACH_INDIA)
     const copyBtn = page.getByRole('button', { name: /Copy as text/ })
-    await copyBtn.click()
+    await openExportFallbackDialog(page)
     await expect(page.getByRole('heading', { name: 'Copy your trip' })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('heading', { name: 'Copy your trip' })).toHaveCount(0)
@@ -333,14 +335,11 @@ test.describe('R17 / UX19 — export the itinerary as plain text', () => {
     await page.reload()
     await expect(page.locator('.plan-hero__title')).toBeVisible()
 
+    // R17 (amended): the same click that would have copied now opens the dialog,
+    // and the dialog names the failure rather than leaving the user guessing.
     await page.getByRole('button', { name: /Copy as text/ }).click()
-    await page.getByRole('button', { name: 'Copy', exact: true }).click()
 
-    await expect(
-      page.getByText(
-        "We couldn't copy automatically. The text is selected — press Ctrl+C (or Cmd+C) to copy it.",
-      ),
-    ).toBeVisible()
+    await expect(page.getByText("Couldn't reach the clipboard")).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Copy your trip' })).toBeVisible()
   })
 
@@ -350,7 +349,7 @@ test.describe('R17 / UX19 — export the itinerary as plain text', () => {
     await planBySkipping(page, 'Mountains')
     await page.locator('[data-alt="saver"]').getByRole('button', { name: 'Use this plan' }).click()
     const dest = await destination(page)
-    await page.getByRole('button', { name: /Copy as text/ }).click()
+    await openExportFallbackDialog(page)
     expect(await page.locator('#export-text').inputValue()).toContain(dest)
   })
 })

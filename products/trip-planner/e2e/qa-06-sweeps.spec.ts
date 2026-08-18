@@ -3,6 +3,7 @@ import {
   answer,
   destination,
   hasHorizontalScroll,
+  openExportFallbackDialog,
   planFor,
   planId,
   planTotal,
@@ -46,7 +47,7 @@ test.describe('UX21 — reflow at 360 / 768 / 1280', () => {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
       expect(await hasHorizontalScroll(page), `S5 (scrolled) overflows at ${width}`).toBe(false)
 
-      await page.getByRole('button', { name: /Copy as text/ }).click()
+      await openExportFallbackDialog(page)
       await expect(page.getByRole('heading', { name: 'Copy your trip' })).toBeVisible()
       expect(await hasHorizontalScroll(page), `S6 overflows at ${width}`).toBe(false)
     })
@@ -300,17 +301,11 @@ test.describe('UX22 — keyboard and hit targets', () => {
     expect(await page.evaluate(() => document.activeElement?.tagName)).toBe('H1')
 
     await tabTo(/Copy as text/)
+    // R17 (amended): Enter copies outright; the dialog is only the fallback.
     await page.keyboard.press('Enter')
-    await expect(page.getByRole('heading', { name: 'Copy your trip' })).toBeVisible()
-    expect(await page.evaluate(() => document.activeElement?.id)).toBe('export-text')
+    await expect(page.locator('[role="status"]').filter({ hasText: 'Copied' })).toHaveCount(1)
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('Day 1 —')
 
-    await tabTo('Copy')
-    await page.keyboard.press('Enter')
-    await expect
-      .poll(async () => (await page.locator('[role="status"]').allInnerTexts()).join(' | '))
-      .toContain('Copied')
-
-    await page.keyboard.press('Escape')
     await expect(page.getByRole('heading', { name: 'Copy your trip' })).toHaveCount(0)
     expect(console_.errors, 'the keyboard flow must log no console errors').toEqual([])
   })
@@ -320,9 +315,9 @@ test.describe('UX22 — keyboard and hit targets', () => {
     await planFor(page, 'Beach', BEACH_INDIA)
     expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY')
 
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByRole('button', { name: 'Update plan' }).click()
-    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 travellers')
+    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 adults')
     expect(
       await page.evaluate(() => document.activeElement?.tagName),
       'focus must not fall to body after Update plan',
@@ -382,7 +377,7 @@ test.describe('UX23 — reduced motion', () => {
       .evaluate((el) => getComputedStyle(el).transitionDuration)
     expect(barTransition.split(',').every((d) => parseFloat(d) <= 0.001)).toBe(true)
 
-    await page.getByRole('button', { name: /Copy as text/ }).click()
+    await openExportFallbackDialog(page)
     const dialogAnim = await page
       .locator('.dialog__panel')
       .evaluate((el) => {
@@ -417,7 +412,6 @@ test.describe('UX24 — offline and console hygiene', () => {
     await waitForPlan(page)
 
     await page.getByRole('button', { name: /Copy as text/ }).click()
-    await page.getByRole('button', { name: 'Copy', exact: true }).click()
     await expect
       .poll(async () => (await page.locator('[role="status"]').allInnerTexts()).join(' | '))
       .toContain('Copied')
@@ -433,9 +427,9 @@ test.describe('UX24 — offline and console hygiene', () => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await planFor(page, 'Beach', BEACH_INDIA)
     await page.locator('.why__summary').click()
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByRole('button', { name: 'Update plan' }).click()
-    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 travellers')
+    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 adults')
     await page.getByRole('button', { name: /Copy as text/ }).click()
     await page.keyboard.press('Escape')
 
@@ -522,12 +516,12 @@ test.describe('reload mid-flow and hostile input sweeps', () => {
     await startFresh(page)
     await page.getByRole('button', { name: 'Beach', exact: true }).click()
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
-    await page.getByLabel('Start date').fill('2026-10-01')
-    await page.getByLabel('End date').fill('2026-10-23')
+    await page.getByLabel('Start date').fill('01/10/2026')
+    await page.getByLabel('End date').fill('23/10/2026')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(page.getByText("Trips longer than 21 nights aren't supported yet")).toBeVisible()
 
-    await page.getByLabel('End date').fill('2026-10-22')
+    await page.getByLabel('End date').fill('22/10/2026')
     await page.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(page.locator('.progress__text')).toBeVisible()
     await page.getByRole('button', { name: 'Plan my trip now' }).click()
@@ -543,7 +537,7 @@ test.describe('reload mid-flow and hostile input sweeps', () => {
       const total = await planTotal(page)
       expect(total).toBeGreaterThan(0)
       await expect(page.locator('.plan-section--cost')).toContainText(
-        travellers === '1' ? 'Total for 1 traveller' : 'Total for 12 travellers',
+        travellers === '1' ? 'Total for 1 adult' : 'Total for 12 adults',
       )
       expect((await destination(page)).length).toBeGreaterThan(0)
       expect((await planId(page)).length).toBeGreaterThan(0)

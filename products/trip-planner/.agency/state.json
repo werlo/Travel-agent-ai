@@ -1,10 +1,27 @@
 {
   "slug": "trip-planner",
+  "productName": "Compass",
   "port": 4079,
   "url": "http://localhost:4079",
-  "createdAt": "2026-08-18T09:18:30Z",
-  "stage": "brief",
-  "verdict": null,
-  "rounds": { "fix": 0, "refine": 0 },
-  "history": []
+  "createdAt": "2026-08-18T09:18:00Z",
+  "stage": "shipped",
+  "verdict": "NOT_READY",
+  "rounds": { "fix": 0, "refine": 1 },
+  "gates": {
+    "qa": "FAIL — 43/48 criteria, 2 open S2, npm run e2e exits 1 (8 of 202 failing)",
+    "panel": "FAIL — mean 7.0/10 against a gate of 8.0, blockers open",
+    "architecture": "NO_GO"
+  },
+  "history": [
+    {
+      "run": 1,
+      "completed": "2026-08-18T15:37:00Z",
+      "verdict": "NOT_READY",
+      "agents": 19,
+      "durationMinutes": 380,
+      "panelRound1": "6.7/10, 9 blockers",
+      "panelRound2": "7.0/10, 3 blockers",
+      "note": "Two fix rounds were available and none were used: the two S2 bugs surfaced in the refinement regression, which has no fix loop after it. Harness gap, not an agent failure."
+    }
+  ]
 }

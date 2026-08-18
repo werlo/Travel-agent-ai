@@ -229,7 +229,7 @@ test.describe('R6 / UX9 — change an earlier answer without losing the others',
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeVisible()
     await expect(page.getByLabel('Total budget for the whole party')).toHaveValue('60000')
-    await expect(page.getByLabel('Start date')).toHaveValue('2026-10-10')
+    await expect(page.getByLabel('Start date')).toHaveValue('10/10/2026')
   })
 })
 

@@ -30,10 +30,10 @@ async function toBasics(page: Page, vibe = 'Beach'): Promise<void> {
   await page.getByRole('button', { name: vibe, exact: true }).click()
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Your trip basics' })).toBeVisible()
-  await page.getByLabel('Start date').fill('2026-10-10')
-  await page.getByLabel('End date').fill('2026-10-15')
+  await page.getByLabel('Start date').fill('10/10/2026')
+  await page.getByLabel('End date').fill('15/10/2026')
   await page.getByLabel('Total budget for the whole party').fill('60000')
-  await page.getByLabel('Travellers').fill('2')
+  await page.getByLabel('Adults', { exact: true }).fill('2')
   await page.getByLabel('Flying from').selectOption('Bengaluru')
 }
 
@@ -63,7 +63,7 @@ test.describe('S2 — trip basics', () => {
     page,
   }) => {
     await toBasics(page)
-    await page.getByLabel('End date').fill('2026-10-09')
+    await page.getByLabel('End date').fill('09/10/2026')
     await page.getByRole('button', { name: 'Continue' }).click()
 
     const error = page.getByText('End date must be after your start date')
@@ -90,7 +90,7 @@ test.describe('S2 — trip basics', () => {
   test('two problems at once produce a focused error summary', async ({ page }) => {
     await toBasics(page)
     await page.getByLabel('Total budget for the whole party').fill('0')
-    await page.getByLabel('Travellers').fill('13')
+    await page.getByLabel('Adults', { exact: true }).fill('13')
     await page.getByRole('button', { name: 'Continue' }).click()
 
     const summary = page.getByText('2 things to fix before we can plan')

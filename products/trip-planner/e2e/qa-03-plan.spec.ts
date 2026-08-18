@@ -140,9 +140,9 @@ test.describe('R8 / UX13 — the cost breakdown adds up', () => {
     const destBefore = await destination(page)
     expect(before.Travel).toBe(fare * 2)
 
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByRole('button', { name: 'Update plan' }).click()
-    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 travellers')
+    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 adults')
 
     expect(await destination(page)).toBe(destBefore)
     const after = await costRows(page)
@@ -160,10 +160,10 @@ test.describe('R8 / UX13 — the cost breakdown adds up', () => {
     expect(rowsBefore.Travel).toBe(farePerTraveller * 2)
     const destBefore = await destination(page)
 
-    await page.getByLabel('Travellers', { exact: true }).fill('4')
+    await page.getByLabel('Adults', { exact: true }).fill('4')
     await page.getByRole('button', { name: 'Update plan' }).click()
     await expect(page.locator('.costtable__label').first()).toBeVisible()
-    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 travellers')
+    await expect(page.locator('.plan-section--cost')).toContainText('Total for 4 adults')
 
     const destAfter = await destination(page)
     const rowsAfter = await costRows(page)
