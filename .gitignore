@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# test + tooling output
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# runtime scratch produced by the agency harness
+**/.agency/logs/
+**/.agency/*.pid
+**/.agency/*.log
+**/.agency/screenshots/
+
+# env + local
+.env
+.env.*
+!.env.example
+.DS_Store
+*.local
