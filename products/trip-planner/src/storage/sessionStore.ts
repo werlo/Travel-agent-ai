@@ -7,8 +7,10 @@ import type {
   PlanVariant,
   QuestionId,
   Relaxation,
+  Restore,
   Vibe,
 } from '../domain/types'
+import { SAVER_ABSENT_REASON, STRETCH_ABSENT_REASON } from '../domain/budget'
 import { isISODate } from '../domain/dates'
 import { isVibe } from '../domain/vibes'
 import { ORIGIN_CITIES } from '../domain/types'
@@ -111,6 +113,12 @@ function narrowPlan(value: unknown): Plan | null {
   }
   if (!Array.isArray(value.days) || value.days.length === 0) return null
   if (!Array.isArray(value.legs) || value.legs.length !== 2) return null
+  // R10's two lists are rendered unguarded, so a plan without them is not a plan
+  // we can draw — it is recomputed instead (R13 makes that free).
+  if (!isRecord(value.why)) return null
+  const why = value.why as Record<string, unknown>
+  if (!Array.isArray(why.reasons) || why.reasons.length < 3) return null
+  if (!Array.isArray(why.rejected) || why.rejected.length < 1) return null
   for (const day of value.days) {
     if (!isRecord(day)) return null
     if (str(day.label) === null || !Array.isArray(day.experiences)) return null
@@ -118,12 +126,27 @@ function narrowPlan(value: unknown): Plan | null {
   return value as unknown as Plan
 }
 
+function narrowRestore(value: unknown): Restore | null {
+  if (!isRecord(value)) return null
+  const key = str(value.key)
+  const label = str(value.label)
+  if (key === null || label === null) return null
+  return {
+    key: key as Restore['key'],
+    label,
+    costDelta: int(value.costDelta),
+    total: int(value.total),
+  }
+}
+
 function narrowRelaxation(value: unknown): Relaxation | null {
   if (!isRecord(value)) return null
   const banner = str(value.banner)
   if (banner === null || !Array.isArray(value.droppedKeys)) return null
+  const restore = narrowRestore(value.restore)
+  if (restore === null) return null
   const droppedKeys = value.droppedKeys.filter((key): key is string => typeof key === 'string')
-  return { droppedKeys: droppedKeys as Relaxation['droppedKeys'], banner }
+  return { droppedKeys: droppedKeys as Relaxation['droppedKeys'], banner, restore }
 }
 
 function narrowPlanSet(value: unknown, catalogueVersion: string): PlanSet | null {
@@ -133,8 +156,18 @@ function narrowPlanSet(value: unknown, catalogueVersion: string): PlanSet | null
   const recommended = narrowPlan(value.recommended)
   if (recommended === null) return null
   const defaulted = int(value.defaultedQuestions) ?? 0
+  const saver = narrowPlan(value.saver)
+  const stretch = narrowPlan(value.stretch)
   return {
     recommended,
+    saver,
+    stretch,
+    // An alternative we could not narrow leaves its slot with a sentence rather
+    // than the empty box R11 explicitly forbids.
+    saverAbsentReason:
+      saver === null ? (str(value.saverAbsentReason) ?? SAVER_ABSENT_REASON) : null,
+    stretchAbsentReason:
+      stretch === null ? (str(value.stretchAbsentReason) ?? STRETCH_ABSENT_REASON) : null,
     relaxation: narrowRelaxation(value.relaxation),
     defaultedQuestions: defaulted,
     catalogueVersion,

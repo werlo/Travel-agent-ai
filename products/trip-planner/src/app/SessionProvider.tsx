@@ -12,7 +12,7 @@ import {
 import { CATALOGUE } from '../data/localCatalogue'
 import { canonicalise } from '../domain/hash'
 import { generatePlanSet } from '../domain/planner'
-import type { ISODate } from '../domain/types'
+import type { ISODate, PlanSet } from '../domain/types'
 import {
   clearSession,
   readSession,
@@ -44,6 +44,12 @@ interface SessionContextValue {
   dispatch: (action: SessionAction) => void
   /** Today, read once at mount. The domain never sees a clock. */
   today: ISODate
+  /**
+   * R14 — the plan we would show if the dropped constraint were put back. It is
+   * derived, never stored: the engine is re-run from the same answers with that one
+   * key forced on, so the number in the banner is the plan behind the button.
+   */
+  restored: PlanSet | null
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -66,7 +72,12 @@ function initFromStorage(): SessionState {
     vibe: session.vibe,
     basics: session.basics,
     answers: session.answers,
-    selectedVariant: session.selectedVariant,
+    // A saved variant whose plan did not survive narrowing falls back rather than
+    // rendering an empty screen.
+    selectedVariant:
+      session.planSet?.[session.selectedVariant] == null
+        ? 'recommended'
+        : session.selectedVariant,
     planSet: session.planSet,
   }
 }
@@ -75,6 +86,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, rawDispatch] = useReducer(sessionReducer, undefined, initFromStorage)
   const [today] = useState(todayISO)
   const persistenceFailed = useRef(false)
+  const lastGenerateMsRef = useRef(0)
 
   const dispatch = useCallback((action: SessionAction) => {
     if (action.type === 'startOver') clearSession()
@@ -115,17 +127,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })
     const lastGenerateMs = performance.now() - startedAt
 
-    const diagnostics = {
-      catalogueVersion: CATALOGUE.meta.version,
-      snapshotDate: CATALOGUE.meta.snapshotDate,
-      phase: 'generating',
-      planId: planSet.recommended.planId,
-      lastGenerateMs,
-      candidatesEvaluated: planSet.candidatesEvaluated,
-      relaxedKeys: planSet.relaxation?.droppedKeys ?? [],
-      persistenceAvailable: state.persistenceAvailable,
-    }
-    ;(window as unknown as { __compass?: unknown }).__compass = diagnostics
+    lastGenerateMsRef.current = lastGenerateMs
 
     const timer = window.setTimeout(() => {
       rawDispatch({ type: 'planReady', planSet })
@@ -136,9 +138,52 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, planKey])
 
+  // ----------------------------------------------------------- diagnostics
+  // docs/02-architecture.md §9. Read-only, contains nothing private, and kept in
+  // step with what is on screen — a stale `relaxedKeys` after an R11 switch or an
+  // R14 restore would send QA looking for a bug that is not there.
+  useEffect(() => {
+    const shown =
+      state.planSet === null
+        ? null
+        : (state.planSet[state.selectedVariant] ?? state.planSet.recommended)
+    ;(window as unknown as { __compass?: unknown }).__compass = {
+      catalogueVersion: CATALOGUE.meta.version,
+      snapshotDate: CATALOGUE.meta.snapshotDate,
+      phase: state.phase,
+      planId: shown?.planId ?? null,
+      variant: state.selectedVariant,
+      lastGenerateMs: lastGenerateMsRef.current,
+      candidatesEvaluated: state.planSet?.candidatesEvaluated ?? 0,
+      relaxedKeys: state.planSet?.relaxation?.droppedKeys ?? [],
+      persistenceAvailable: state.persistenceAvailable,
+    }
+  }, [state.phase, state.planSet, state.selectedVariant, state.persistenceAvailable])
+
+  // ------------------------------------------------- R14, the restore preview
+  // Only asked for when the engine has already said a plan with the constraint back
+  // exists; `restore.total === null` means it does not, and the banner says so.
+  const restore = state.planSet?.relaxation?.restore ?? null
+  const restoreKey =
+    state.restoreRequested && restore !== null && restore.total !== null
+      ? restore.key
+      : null
+
+  const restored = useMemo<PlanSet | null>(() => {
+    if (restoreKey === null || request === null) return null
+    return generatePlanSet(
+      { ...request.input, forceConstraints: [restoreKey] },
+      CATALOGUE,
+      { defaultedQuestions: request.defaultedQuestions },
+    )
+    // `planKey` is the determinism hash of the answers; `restoreKey` is the one
+    // constraint we are putting back. Nothing else can change this plan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoreKey, planKey])
+
   const value = useMemo<SessionContextValue>(
-    () => ({ state, dispatch, today }),
-    [state, dispatch, today],
+    () => ({ state, dispatch, today, restored }),
+    [state, dispatch, today, restored],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

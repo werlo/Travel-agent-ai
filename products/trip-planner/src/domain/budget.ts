@@ -51,3 +51,46 @@ export function noFitLineFor(total: Rupees, budget: Rupees): BudgetLine {
     label: `Nothing in this catalogue fits ${formatRupees(budget)} — the closest is ${formatRupees(total)}`,
   }
 }
+
+// ------------------------------------------------------- R11: the alternatives
+
+/** A Saver has to be a real saving, not a rounding: at most 90% of the recommendation. */
+export const SAVER_MAX_PERCENT = 90
+
+export function saverCeiling(recommendedTotal: Rupees): Rupees {
+  return Math.floor((recommendedTotal * SAVER_MAX_PERCENT) / 100)
+}
+
+/**
+ * The two sentences that stand in the empty slots (R11). An empty box is a bug:
+ * the design gives both of these literally (docs/03-design.md §4 S5).
+ */
+export const SAVER_ABSENT_REASON = 'No cheaper option in this catalogue for these dates'
+export const STRETCH_ABSENT_REASON =
+  'No pricier option that still stays inside your stretch band'
+
+/** `₹7,700 less than the recommendation`. */
+export function saverDeltaLabel(
+  recommendedTotal: Rupees,
+  saverTotal: Rupees,
+): string {
+  return `${formatRupees(recommendedTotal - saverTotal)} less than the recommendation`
+}
+
+/** `₹19,800 more — within your stretch band`. */
+export function stretchDeltaLabel(
+  recommendedTotal: Rupees,
+  stretchTotal: Rupees,
+): string {
+  return `${formatRupees(stretchTotal - recommendedTotal)} more — within your stretch band`
+}
+
+/** `₹7,700 more` — the recommendation seen from whichever plan is on screen now. */
+export function recommendedDeltaLabel(
+  shownTotal: Rupees,
+  recommendedTotal: Rupees,
+): string {
+  const delta = recommendedTotal - shownTotal
+  if (delta === 0) return 'The same total'
+  return delta > 0 ? `${formatRupees(delta)} more` : `${formatRupees(-delta)} less`
+}

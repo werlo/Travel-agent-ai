@@ -185,7 +185,10 @@ describe('S4 and S5 — the plan (R5, R7, R8, R9, R13, R16)', () => {
     expect(screen.getByText('3 questions answered for you')).toBeInTheDocument()
 
     // R7 — six day blocks for a 5-night trip, each with a named experience.
-    const days = screen.getAllByRole('heading', { level: 3 })
+    // Scoped to the itinerary: "Why this trip" (R10) carries sub-headings of its
+    // own at the same level, and this assertion is about the days.
+    const dayblocks = document.querySelector('.dayblocks') as HTMLElement
+    const days = within(dayblocks).getAllByRole('heading', { level: 3 })
     expect(days).toHaveLength(6)
     days.forEach((day, index) => expect(day.textContent).toContain(`Day ${index + 1}`))
     for (const day of days) {

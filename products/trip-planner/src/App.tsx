@@ -23,7 +23,7 @@ import { PlanScreen } from './ui/screens/PlanScreen'
  */
 
 function AppShell() {
-  const { state, dispatch, today } = useSession()
+  const { state, dispatch, today, restored } = useSession()
   const { phase } = state
 
   const [draftFacts, setDraftFacts] = useState<string[] | null>(null)
@@ -130,14 +130,29 @@ function AppShell() {
           />
         ) : null}
 
-        {phase === 'plan' && state.planSet !== null ? (
+        {phase === 'plan' && state.planSet !== null && state.vibe !== null && state.basics !== null ? (
           <PlanScreen
             planSet={state.planSet}
+            vibe={state.vibe}
+            budget={state.basics.budget}
+            selectedVariant={state.selectedVariant}
+            restoreRequested={state.restoreRequested}
+            restored={restored}
             onAnswerDefaulted={() => dispatch({ type: 'answerDefaulted' })}
+            onSelectVariant={(variant) => dispatch({ type: 'selectVariant', variant })}
+            onRequestRestore={() => dispatch({ type: 'requestRestore' })}
+            onApplyRestore={(planSet) =>
+              dispatch({
+                type: 'applyRestore',
+                planSet,
+                label: state.planSet?.relaxation?.restore.label ?? '',
+              })
+            }
+            onDismissRestore={() => dispatch({ type: 'dismissRestore' })}
           />
         ) : null}
       </main>
-      <p className="visually-hidden" role="status" aria-live="polite">
+      <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {state.announcement}
       </p>
       <ProvenanceLine />

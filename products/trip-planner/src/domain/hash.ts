@@ -26,7 +26,11 @@ export function fnv1a32(input: string): number {
 export function canonicalise(input: PlanInput, catalogueVersion: string): string {
   const { vibe, basics, answers } = input
   const answerPart = answers.map(([q, o]) => `${q}=${o}`).join(';')
-  return [
+  // Appended only when non-empty, so an ordinary plan's ID is unchanged by R14
+  // existing at all — and a restored plan is genuinely a different plan.
+  const forced = [...(input.forceConstraints ?? [])].sort()
+  const forcedPart = forced.length === 0 ? '' : `|forced:${forced.join(',')}`
+  return ([
     `v1`,
     `cat:${catalogueVersion}`,
     `vibe:${vibe}`,
@@ -36,7 +40,7 @@ export function canonicalise(input: PlanInput, catalogueVersion: string): string
     `travellers:${basics.travellers}`,
     `origin:${basics.origin}`,
     `answers:${answerPart}`,
-  ].join('|')
+  ].join('|') + forcedPart)
 }
 
 /** Four base-36 characters of the hash — enough to distinguish, short enough to read. */

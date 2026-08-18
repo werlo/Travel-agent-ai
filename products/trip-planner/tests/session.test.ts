@@ -9,8 +9,9 @@ import {
   type PersistedSession,
 } from '../src/storage/sessionStore'
 import { CATALOGUE } from '../src/data/localCatalogue'
+import { formatRupees } from '../src/domain/money'
 import { generatePlanSet } from '../src/domain/planner'
-import type { Basics } from '../src/domain/types'
+import type { Basics, PlanInput, PlanSet } from '../src/domain/types'
 
 /**
  * The store and the session at rest (R2, R5, R6, R15). The reducer is pure, so it
@@ -284,5 +285,176 @@ describe('the session at rest (R15)', () => {
     persist()
     clearSession()
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
+  })
+})
+
+/**
+ * Slice 3 — the trust layer's share of the session (R11, R14, R15).
+ * Switching variant and restoring a constraint both have to survive a reload, and
+ * a stored plan that could not render must be recomputed rather than crash S5.
+ */
+describe('the trust layer at rest and in the reducer (R11, R14)', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  function planned(): { state: ReturnType<typeof sessionReducer>; planSet: PlanSet } {
+    let state = sessionReducer(afterBasics(), { type: 'skipToPlan' })
+    const request = plannerRequest(state)!
+    const planSet = generatePlanSet(request.input, CATALOGUE, {
+      defaultedQuestions: request.defaultedQuestions,
+    })
+    state = sessionReducer(state, { type: 'planReady', planSet })
+    return { state, planSet }
+  }
+
+  it('switches variant and announces the new plan (R11)', () => {
+    const { state, planSet } = planned()
+    expect(planSet.saver).not.toBeNull()
+
+    const switched = sessionReducer(state, { type: 'selectVariant', variant: 'saver' })
+    expect(switched.selectedVariant).toBe('saver')
+    // `formatRupees`, not `Intl`: the grouping is hand-written precisely so that
+    // Node and Chromium cannot disagree (docs/02-architecture.md §1).
+    expect(switched.announcement).toBe(
+      `Plan updated. ${planSet.saver!.destinationName}, ${formatRupees(
+        planSet.saver!.cost.partyTotal,
+      )} total for 2 travellers.`,
+    )
+
+    // Switching back is symmetrical, and the plan set itself never changed.
+    const back = sessionReducer(switched, { type: 'selectVariant', variant: 'recommended' })
+    expect(back.selectedVariant).toBe('recommended')
+    expect(back.planSet).toBe(planSet)
+  })
+
+  it('ignores a variant that does not exist rather than blanking the screen', () => {
+    const { state, planSet } = planned()
+    const withoutSaver = { ...state, planSet: { ...planSet, saver: null } }
+    expect(
+      sessionReducer(withoutSaver, { type: 'selectVariant', variant: 'saver' })
+        .selectedVariant,
+    ).toBe('recommended')
+  })
+
+  it('round-trips the chosen variant across a reload (R15)', () => {
+    const { planSet } = planned()
+    writeSession({
+      schema: 1,
+      catalogueVersion: CATALOGUE.meta.version,
+      phase: 'plan',
+      vibe: 'beach',
+      basics: BASICS,
+      answers: {},
+      selectedVariant: 'saver',
+      planSet,
+    })
+
+    const restored = readSession(CATALOGUE.meta.version).session
+    expect(restored?.selectedVariant).toBe('saver')
+    expect(restored?.planSet?.saver?.planId).toBe(planSet.saver!.planId)
+    expect(restored?.planSet?.saverAbsentReason).toBeNull()
+  })
+
+  it('recomputes a stored plan that lost its "Why this trip" lists', () => {
+    const { planSet } = planned()
+    const gutted = {
+      ...planSet,
+      recommended: { ...planSet.recommended, why: { reasons: [], rejected: [] } },
+    }
+    writeSession({
+      schema: 1,
+      catalogueVersion: CATALOGUE.meta.version,
+      phase: 'plan',
+      vibe: 'beach',
+      basics: BASICS,
+      answers: {},
+      selectedVariant: 'recommended',
+      planSet: gutted as unknown as PlanSet,
+    })
+
+    const restored = readSession(CATALOGUE.meta.version).session
+    expect(restored?.planSet).toBeNull()
+    expect(restored?.phase).toBe('generating')
+  })
+
+  it('never leaves an alternative slot with neither a plan nor a sentence (R11)', () => {
+    const { planSet } = planned()
+    const corrupt = { ...planSet, saver: { planId: 7 }, saverAbsentReason: null }
+    writeSession({
+      schema: 1,
+      catalogueVersion: CATALOGUE.meta.version,
+      phase: 'plan',
+      vibe: 'beach',
+      basics: BASICS,
+      answers: {},
+      selectedVariant: 'recommended',
+      planSet: corrupt as unknown as PlanSet,
+    })
+
+    const restored = readSession(CATALOGUE.meta.version).session
+    expect(restored?.planSet?.saver).toBeNull()
+    expect(restored?.planSet?.saverAbsentReason).toBe(
+      'No cheaper option in this catalogue for these dates',
+    )
+  })
+
+  it('asks for and dismisses a restore without touching the plan (R14)', () => {
+    const relaxed = generatePlanSet(
+      {
+        vibe: 'party',
+        basics: { ...BASICS, budget: 25000, travellers: 4, endDate: '2026-10-12' },
+        answers: [
+          ['party-region', 'international'],
+          ['party-haul', 'no-preference'],
+          ['party-scene', 'no-preference'],
+          ['stay-style', 'no-preference'],
+        ],
+      },
+      CATALOGUE,
+    )
+    expect(relaxed.relaxation).not.toBeNull()
+
+    let state = sessionReducer(afterBasics(), { type: 'planReady', planSet: relaxed })
+    expect(state.restoreRequested).toBe(false)
+
+    state = sessionReducer(state, { type: 'requestRestore' })
+    expect(state.restoreRequested).toBe(true)
+    expect(state.planSet).toBe(relaxed)
+
+    state = sessionReducer(state, { type: 'dismissRestore' })
+    expect(state.restoreRequested).toBe(false)
+    expect(state.planSet).toBe(relaxed)
+  })
+
+  it('applies a restore by replacing the plan set and announcing it (R14)', () => {
+    const input = {
+      vibe: 'party' as const,
+      basics: { ...BASICS, budget: 25000, travellers: 4, endDate: '2026-10-12' },
+      answers: [
+        ['party-region', 'international'],
+        ['party-haul', 'no-preference'],
+        ['party-scene', 'no-preference'],
+        ['stay-style', 'no-preference'],
+      ] as PlanInput['answers'],
+    }
+    const relaxed = generatePlanSet(input, CATALOGUE)
+    const restored = generatePlanSet({ ...input, forceConstraints: ['region'] }, CATALOGUE)
+
+    let state = sessionReducer(afterBasics(), { type: 'planReady', planSet: relaxed })
+    state = sessionReducer(state, { type: 'requestRestore' })
+    state = sessionReducer(state, {
+      type: 'applyRestore',
+      planSet: restored,
+      label: 'international',
+    })
+
+    expect(state.planSet).toBe(restored)
+    expect(state.restoreRequested).toBe(false)
+    expect(state.selectedVariant).toBe('recommended')
+    expect(state.announcement).toMatch(
+      /^Showing the international plan\. .+, ₹[\d,]+ total\.$/,
+    )
   })
 })

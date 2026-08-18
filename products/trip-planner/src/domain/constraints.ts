@@ -1,3 +1,4 @@
+import { formatDuration, nightsLabel } from './dates'
 import { formatRupees } from './money'
 import { VIBE_LABELS } from './vibes'
 import type {
@@ -38,6 +39,10 @@ export function regionConstraint(region: Region): ConstraintSpec {
       region === 'domestic'
         ? 'we looked outside India too'
         : 'we searched within India instead',
+    rejectNote: (d, ctx) =>
+      region === 'domestic'
+        ? `${d.country}, and you asked to stay within India — ${formatDuration(d.fares[ctx.origin].hours)} in the air`
+        : `inside India, and you asked to go international — ${formatDuration(d.fares[ctx.origin].hours)} in the air`,
   }
 }
 
@@ -53,6 +58,8 @@ export function tagConstraint(
     priority: PRIORITY.question,
     test: (d) => d.tags.includes(tag),
     relaxNote,
+    rejectNote: (d, ctx) =>
+      `not ${label}, and it rates ${d.vibeAffinity[ctx.vibe]} out of 5 for ${VIBE_LABELS[ctx.vibe]}`,
   }
 }
 
@@ -63,6 +70,8 @@ export function flightHoursConstraint(questionId: string, maxHours: number): Con
     priority: PRIORITY.question,
     test: (d, ctx) => d.fares[ctx.origin].hours < maxHours,
     relaxNote: 'we included longer flights',
+    rejectNote: (d, ctx) =>
+      `${formatDuration(d.fares[ctx.origin].hours)} in the air, and you asked for under ${maxHours} hours`,
   }
 }
 
@@ -77,6 +86,8 @@ export function nightsConstraint(): ConstraintSpec {
     priority: PRIORITY.dates,
     test: (d, ctx) => ctx.nights >= d.minNights && ctx.nights <= d.maxNights,
     relaxNote: 'we ignored the suggested trip length',
+    rejectNote: (d, ctx) =>
+      `built for ${d.minNights} to ${d.maxNights} nights and you have ${nightsLabel(ctx.nights)}`,
   }
 }
 
@@ -124,4 +135,26 @@ export function relaxationBanner(dropped: ConstraintSpec, ctx: PlanContext): str
 
 export function keysOf(specs: readonly ConstraintSpec[]): ConstraintKey[] {
   return specs.map((spec) => spec.key)
+}
+
+/** Priority <= 2 is arithmetic or the trip itself; those are never given up (A9). */
+export function isDroppable(spec: ConstraintSpec): boolean {
+  return spec.priority > PRIORITY.travellers
+}
+
+/**
+ * The ladder's drop order, most-recent-graph-answer first, then region, then vibe.
+ * Exposed so the order A9 documents can be asserted directly rather than inferred
+ * from whichever plan the engine happened to produce.
+ */
+export function dropOrder(specs: readonly ConstraintSpec[]): ConstraintKey[] {
+  return sortByPriority(specs).filter(isDroppable).reverse().map((spec) => spec.key)
+}
+
+/** The first constraint the user still has, that the ladder has taken away. */
+export function mostImportantDropped(
+  ordered: readonly ConstraintSpec[],
+  active: readonly ConstraintSpec[],
+): ConstraintSpec | null {
+  return ordered.find((spec) => !active.includes(spec)) ?? null
 }

@@ -1,3 +1,5 @@
+import { travellersLabel } from '../domain/dates'
+import { formatRupees } from '../domain/money'
 import { derivePath, isComplete, nodeFor, optionFor } from '../domain/questions/path'
 import { QUESTION_GRAPH } from '../domain/questions/graph'
 import type {
@@ -32,6 +34,12 @@ export interface SessionState {
   questionCursor: number | null
   selectedVariant: PlanVariant
   planSet: PlanSet | null
+  /**
+   * R14 — the user pressed `Put <constraint> back` and is being shown what it
+   * costs. It is a request, not a plan: the engine re-runs from the same answers,
+   * so nothing about it can drift out of step with the plan on screen.
+   */
+  restoreRequested: boolean
   /** True for one render after an edit sent the user down a different branch (R6). */
   branchChanged: boolean
   /** Field name -> message, basics only (R3). */
@@ -50,6 +58,10 @@ export type SessionAction =
   | { type: 'back' }
   | { type: 'skipToPlan' }
   | { type: 'answerDefaulted' }
+  | { type: 'selectVariant'; variant: PlanVariant }
+  | { type: 'requestRestore' }
+  | { type: 'dismissRestore' }
+  | { type: 'applyRestore'; planSet: PlanSet; label: string }
   | { type: 'resume' }
   | { type: 'planReady'; planSet: PlanSet }
   | { type: 'restore'; session: PersistedSession }
@@ -64,6 +76,7 @@ export const initialState: SessionState = {
   questionCursor: null,
   selectedVariant: 'recommended',
   planSet: null,
+  restoreRequested: false,
   branchChanged: false,
   errors: {},
   persistenceAvailable: true,
@@ -80,7 +93,15 @@ export function sessionReducer(
       if (state.vibe === action.vibe) return state
       // A different vibe means a different entry question; the old answers belong
       // to a graph the user is no longer walking.
-      return { ...state, vibe: action.vibe, answers: {}, questionCursor: null, planSet: null }
+      return {
+        ...state,
+        vibe: action.vibe,
+        answers: {},
+        questionCursor: null,
+        planSet: null,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+      }
     }
 
     case 'startBasics': {
@@ -99,6 +120,8 @@ export function sessionReducer(
         phase: 'question',
         questionCursor: null,
         planSet: null,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
         announcement: '',
       }
     }
@@ -121,6 +144,8 @@ export function sessionReducer(
         answers,
         questionCursor: null,
         planSet: null,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
         branchChanged:
           previous !== undefined && previous !== action.optionId && oldNext !== newNext,
         phase: done ? 'generating' : 'question',
@@ -137,7 +162,14 @@ export function sessionReducer(
     }
 
     case 'skipToPlan':
-      return { ...state, phase: 'generating', questionCursor: null, planSet: null }
+      return {
+        ...state,
+        phase: 'generating',
+        questionCursor: null,
+        planSet: null,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+      }
 
     case 'resume': {
       if (state.planSet !== null) return { ...state, phase: 'plan', announcement: '' }
@@ -149,7 +181,49 @@ export function sessionReducer(
       return { ...state, phase: 'question', questionCursor: null }
 
     case 'planReady':
-      return { ...state, planSet: action.planSet, phase: 'plan', questionCursor: null }
+      return {
+        ...state,
+        planSet: action.planSet,
+        phase: 'plan',
+        questionCursor: null,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+      }
+
+    // R11 — switching alternative rewires the whole screen, because every region of
+    // it reads `planSet[selectedVariant]`. There is no partial update to get wrong.
+    case 'selectVariant': {
+      const { planSet } = state
+      if (planSet === null) return state
+      const next = planSet[action.variant]
+      if (next === null || action.variant === state.selectedVariant) return state
+      return {
+        ...state,
+        selectedVariant: action.variant,
+        announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
+          next.cost.partyTotal,
+        )} total for ${travellersLabel(next.travellers)}.`,
+      }
+    }
+
+    case 'requestRestore': {
+      if (state.planSet?.relaxation == null) return state
+      return { ...state, restoreRequested: true, announcement: '' }
+    }
+
+    case 'dismissRestore':
+      return { ...state, restoreRequested: false, announcement: '' }
+
+    case 'applyRestore':
+      return {
+        ...state,
+        planSet: action.planSet,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+        announcement: `Showing the ${action.label} plan. ${
+          action.planSet.recommended.destinationName
+        }, ${formatRupees(action.planSet.recommended.cost.partyTotal)} total.`,
+      }
 
     case 'restore': {
       const { session } = action
@@ -160,8 +234,12 @@ export function sessionReducer(
         basics: session.basics,
         answers: session.answers,
         questionCursor: null,
-        selectedVariant: session.selectedVariant,
+        selectedVariant:
+          session.planSet?.[session.selectedVariant] == null
+            ? 'recommended'
+            : session.selectedVariant,
         planSet: session.planSet,
+        restoreRequested: false,
         errors: {},
       }
     }

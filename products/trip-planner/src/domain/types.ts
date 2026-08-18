@@ -215,12 +215,33 @@ export interface ConstraintSpec {
   test: (d: Destination, ctx: PlanContext) => boolean
   /** The clause used in the R14 banner. */
   relaxNote: string
+  /**
+   * Why a destination this constraint excluded was rejected, in the user's terms
+   * and ALWAYS carrying a numeral — R10 requires the rejected line to contain one
+   * ('11h in the air, and you asked for under 6 hours').
+   */
+  rejectNote: (d: Destination, ctx: PlanContext) => string
+}
+
+/**
+ * What re-applying the dropped constraint would cost (R14). `total` is the party
+ * total of the best plan that honours it again; both are null when the catalogue
+ * has nothing at all with the constraint back on.
+ */
+export interface Restore {
+  key: ConstraintKey
+  /** 'international' — the words the banner's button uses. */
+  label: string
+  /** Signed: positive = re-applying it costs more. */
+  costDelta: Rupees | null
+  total: Rupees | null
 }
 
 export interface Relaxation {
   droppedKeys: readonly ConstraintKey[]
   /** 'No international party trip fits ₹25,000 for 4 — we searched within India instead'. */
   banner: string
+  restore: Restore
 }
 
 // -------------------------------------------------------------------- pricing
@@ -297,6 +318,26 @@ export interface BudgetLine {
   label: string
 }
 
+/** R10 — one reason, quoting one of the user's own answers back at them. */
+export interface Reason {
+  text: string
+  /** The user's own answer label, so the UI can prove the quote is theirs. */
+  quotes: string
+}
+
+/** R10 — a named runner-up. `line` MUST contain a numeral. */
+export interface Rejection {
+  destinationName: string
+  line: string
+}
+
+export interface Why {
+  /** Always >= 3 (docs/02-architecture.md §4.8 rule 7). */
+  reasons: readonly Reason[]
+  /** Always >= 1, computed against all 14 destinations, not just the survivors. */
+  rejected: readonly Rejection[]
+}
+
 export interface Plan {
   /** Visible on screen (R13). */
   planId: string
@@ -315,11 +356,20 @@ export interface Plan {
   days: readonly DayBlock[]
   cost: CostBreakdown
   budget: BudgetLine
+  why: Why
   score: number
 }
 
 export interface PlanSet {
   recommended: Plan
+  /** R11 — total <= 90% of the recommendation, or null with a sentence instead. */
+  saver: Plan | null
+  /** R11 — dearer than the recommendation but inside budget x 1.25. */
+  stretch: Plan | null
+  /** 'No cheaper option in this catalogue for these dates' when `saver` is null. */
+  saverAbsentReason: string | null
+  /** 'No pricier option that still stays inside your stretch band'. */
+  stretchAbsentReason: string | null
   relaxation: Relaxation | null
   /** R5: '3 questions answered for you'. */
   defaultedQuestions: number
@@ -333,4 +383,9 @@ export interface PlanInput {
   basics: Basics
   /** Effective, on-path, in path order. */
   answers: AnswerPairs
+  /**
+   * R14's restore control: keys the relaxation ladder is forbidden to drop. Part of
+   * the plan ID hash, so a restored plan is a different plan and says so.
+   */
+  forceConstraints?: readonly ConstraintKey[]
 }
