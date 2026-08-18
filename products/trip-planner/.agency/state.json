@@ -1,0 +1,10 @@
+{
+  "slug": "trip-planner",
+  "port": 4079,
+  "url": "http://localhost:4079",
+  "createdAt": "2026-08-18T09:18:30Z",
+  "stage": "brief",
+  "verdict": null,
+  "rounds": { "fix": 0, "refine": 0 },
+  "history": []
+}
