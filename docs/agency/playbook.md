@@ -99,7 +99,8 @@ per-criterion PASS/FAIL with evidence, and bugs with severity —
 | S4 | Polish |
 
 **Gate:** verdict PASS with zero open S1/S2. Otherwise the failures go back to a
-developer and QA re-verifies, up to the fix-round cap.
+developer and QA re-verifies, up to the fix-round cap. The cap is a budget for the
+whole run, not per stage — a regression in Stage 6 draws on whatever is left of it.
 
 ## Stage 5 — Customer Panel (Customer Judges)
 
@@ -126,7 +127,12 @@ Only runs if the panel gate fails. Per round:
    point is rejected in writing, not silently dropped.
 2. Developer implements the top-ranked items.
 3. QA runs a regression: full suite plus targeted checks on the changes.
-4. Judges who scored below threshold or filed blockers re-run their goal. Judges
+4. **Any S1/S2 the regression finds goes back through the fix loop**, drawing on
+   whatever fix rounds remain. A blocker introduced by a customer fix is exactly as
+   serious as one that was there all along — the first real run of this pipeline
+   shipped two S2 bugs to the founder with both fix rounds unspent, because the
+   regression had no loop behind it.
+5. Judges who scored below threshold or filed blockers re-run their goal. Judges
    who already passed are not re-run.
 
 Loops until the gate passes or the refine-round cap is hit.

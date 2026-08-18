@@ -454,9 +454,8 @@ phase('QA')
 let qa = null
 let fixRounds = 0
 
-for (let round = 1; round <= cfg.maxFixRounds + 1; round++) {
-  qa = await agent(
-    `You are the QA Engineer. ${round === 1 ? 'Full verification pass' : `Re-verification, round ${round}, after developer fixes`}.
+function qaPrompt(what, appendNote) {
+  return `You are the QA Engineer. ${what}.
 
 ${CONTEXT}
 
@@ -475,28 +474,29 @@ double-submit.
 You may create and edit files under ${DIR}/tests/ and ${DIR}/e2e/ ONLY. Never modify
 product source to make a test pass — file a bug instead.
 
-Write ${DOCS}/04-qa-report.md${round > 1 ? ' — append a new round section, do not overwrite the previous rounds' : ''} with the real command output. PASS requires zero open S1/S2. Mark anything you could not test as UNTESTED rather than passing it.`,
-    { agentType: 'qa-engineer', label: `qa:round-${round}`, phase: 'QA', schema: S_QA, effort: EFFORT.qa }
-  )
+Write ${DOCS}/04-qa-report.md${appendNote ? ' — append a new round section, do not overwrite the previous rounds' : ''} with the real command output. PASS requires zero open S1/S2. Mark anything you could not test as UNTESTED rather than passing it.`
+}
 
-  if (!qa) {
-    log(`QA round ${round} produced no report.`)
-    break
-  }
+// Drive S1/S2 bugs to zero, whoever found them and whenever. Called after the first
+// QA pass AND after the refinement regression — a blocker introduced by a customer
+// fix is exactly as serious as one that was there all along, and the run that
+// exposed this had two fix rounds unspent while two S2s went to the founder.
+async function clearBlockers(current, phaseName, tag) {
+  let result = current
 
-  const blocking = severe(qa.bugs)
-  log(`QA round ${round}: ${qa.verdict} — ${qa.criteriaPassed}/${qa.criteriaTotal} criteria, ${blocking.length} S1/S2, ${(qa.bugs || []).length} bugs total.`)
+  while (result && severe(result.bugs).length > 0) {
+    const blocking = severe(result.bugs)
 
-  if (qa.verdict === 'PASS' && blocking.length === 0) break
+    if (fixRounds >= cfg.maxFixRounds) {
+      log(`Fix rounds exhausted (${cfg.maxFixRounds} used) with ${blocking.length} S1/S2 still open. Reported to the founder as a failed gate, not rounded up.`)
+      break
+    }
 
-  if (round > cfg.maxFixRounds) {
-    log(`Fix rounds exhausted (${cfg.maxFixRounds}) with ${blocking.length} S1/S2 still open. This goes in the founder's report as a failed gate.`)
-    break
-  }
+    fixRounds++
+    const n = fixRounds
 
-  fixRounds++
-  await agent(
-    `You are the Developer. Fix the blocking bugs QA filed.
+    await agent(
+      `You are the Developer. Fix the blocking bugs QA filed.
 
 ${CONTEXT}
 
@@ -508,9 +508,40 @@ than changing code you never saw fail. Fix causes, not the assertions. Do not re
 anything outside these fixes — QA's regression baseline depends on it.
 
 Before returning, from ${DIR}: \`npm run lint && npm run build && npm test\` all pass, and
-commit: fix(${cfg.slug}): QA round ${round}.`,
-    { agentType: 'developer', label: `dev:qa-fixes-${round}`, phase: 'QA', schema: S_BUILD, effort: EFFORT.fix }
-  )
+commit: fix(${cfg.slug}): ${tag} fix round ${n}.`,
+      { agentType: 'developer', label: `dev:${tag}-fixes-${n}`, phase: phaseName, schema: S_BUILD, effort: EFFORT.fix }
+    )
+
+    const recheck = await agent(
+      qaPrompt(`Re-verification after developer fix round ${n}. Confirm each bug you filed is actually gone, and that nothing which passed before fails now`, true),
+      { agentType: 'qa-engineer', label: `qa:${tag}-verify-${n}`, phase: phaseName, schema: S_QA, effort: EFFORT.qa }
+    )
+
+    if (!recheck) {
+      log(`Re-verification after fix round ${n} produced no report. Keeping the previous QA result.`)
+      break
+    }
+
+    result = recheck
+    log(`After fix round ${n}: ${result.verdict} — ${result.criteriaPassed}/${result.criteriaTotal} criteria, ${severe(result.bugs).length} S1/S2 open.`)
+  }
+
+  return result
+}
+
+qa = await agent(qaPrompt('Full verification pass', false), {
+  agentType: 'qa-engineer',
+  label: 'qa:round-1',
+  phase: 'QA',
+  schema: S_QA,
+  effort: EFFORT.qa,
+})
+
+if (qa) {
+  log(`QA: ${qa.verdict} — ${qa.criteriaPassed}/${qa.criteriaTotal} criteria, ${severe(qa.bugs).length} S1/S2, ${(qa.bugs || []).length} bugs total.`)
+  qa = await clearBlockers(qa, 'QA', 'qa')
+} else {
+  log('QA produced no report. The customer panel will see whatever was built.')
 }
 
 // ---------------------------------------------------------------- 5. Customer panel
@@ -634,8 +665,9 @@ Append a round section to ${DOCS}/04-qa-report.md. Tests only — never product 
   )
 
   if (regression) {
-    qa = regression
     log(`Regression: ${regression.verdict} — ${severe(regression.bugs).length} S1/S2 open.`)
+    // A blocker a customer fix introduced is as serious as one that was always there.
+    qa = await clearBlockers(regression, 'Refinement', `refine-${refineRounds}`)
   }
 
   // Re-judge only the judges who were not satisfied. The rest already voted.
