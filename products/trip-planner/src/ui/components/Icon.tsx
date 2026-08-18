@@ -17,6 +17,7 @@ export type IconName =
   | 'plane'
   | 'bed'
   | 'star'
+  | 'copy'
 
 const PATHS: Readonly<Record<IconName, readonly string[]>> = {
   mountains: ['M2 19h20', 'M2.5 19 9 8l4.2 6.8', 'M11 19l5.2-8.4L21.5 19'],
@@ -45,6 +46,7 @@ const PATHS: Readonly<Record<IconName, readonly string[]>> = {
   star: [
     'M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8L12 3.5z',
   ],
+  copy: ['M9 9h11v11H9z', 'M15 5H4v11h3'],
 }
 
 export interface IconProps {

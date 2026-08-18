@@ -1,10 +1,22 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { toPlainText } from '../../domain/export'
 import { formatRupees } from '../../domain/money'
-import type { BudgetStatus, PlanSet, PlanVariant, Vibe } from '../../domain/types'
+import type {
+  Basics,
+  BudgetStatus,
+  CatalogueMeta,
+  PlanSet,
+  PlanVariant,
+  Vibe,
+} from '../../domain/types'
+import { AdjustPanel } from '../components/AdjustPanel'
 import { Alternatives } from '../components/Alternatives'
 import { CostTable } from '../components/CostTable'
 import { DayBlockCard } from '../components/DayBlock'
+import { Icon } from '../components/Icon'
 import { RelaxBanner } from '../components/RelaxBanner'
 import { WhyThisTrip } from '../components/WhyThisTrip'
+import { ExportDialog } from './ExportDialog'
 import { defaultedLabel, planFacts, planIdLine } from '../format'
 
 /**
@@ -14,7 +26,9 @@ import { defaultedLabel, planFacts, planIdLine } from '../format'
  * makes R11's "the main itinerary, cost breakdown, budget line and plan ID all
  * update" true by construction rather than by four separate handlers agreeing.
  *
- * The adjust panel and the text export are slice 4 (docs/02-architecture.md §10).
+ * Slice 4 adds the two controls that make the plan the user's rather than ours:
+ * the adjust panel (R12), which re-plans in place from the answers already given,
+ * and the export dialog (R17), which is the only way the itinerary leaves the app.
  * Nothing here is a placeholder: every section that renders is real.
  */
 
@@ -28,13 +42,16 @@ const BADGE_VARIANT: Record<BudgetStatus, string> = {
 export interface PlanScreenProps {
   planSet: PlanSet
   vibe: Vibe
-  /** The party budget the user set — the R14 banner reports the gap against it. */
-  budget: number
+  /** The basics behind this plan — what the adjust panel edits (R12). */
+  basics: Basics
+  meta: CatalogueMeta
   selectedVariant: PlanVariant
   restoreRequested: boolean
   restored: PlanSet | null
   onAnswerDefaulted: () => void
   onSelectVariant: (variant: PlanVariant) => void
+  /** R12 — apply new basics and re-plan without re-asking anything. */
+  onAdjust: (basics: Basics) => void
   onRequestRestore: () => void
   onApplyRestore: (planSet: PlanSet) => void
   onDismissRestore: () => void
@@ -43,12 +60,14 @@ export interface PlanScreenProps {
 export function PlanScreen({
   planSet,
   vibe,
-  budget,
+  basics,
+  meta,
   selectedVariant,
   restoreRequested,
   restored,
   onAnswerDefaulted,
   onSelectVariant,
+  onAdjust,
   onRequestRestore,
   onApplyRestore,
   onDismissRestore,
@@ -58,6 +77,27 @@ export function PlanScreen({
   const plan = planSet[selectedVariant] ?? planSet.recommended
   const { cost } = plan
 
+  const [exporting, setExporting] = useState(false)
+  const copyButtonRef = useRef<HTMLButtonElement>(null)
+  const wasExporting = useRef(false)
+
+  /**
+   * docs/03-design.md §6.1 — closing S6 returns focus to `Copy as text`.
+   *
+   * It has to happen *after* the dialog has left the DOM. Focusing from inside the
+   * close handler runs while the dialog is still modal, and the browser ignores a
+   * focus() call on an inert element outside it — focus then lands on <body>, which
+   * §6.1 forbids. Found by the keyboard-only E2E.
+   */
+  useEffect(() => {
+    if (wasExporting.current && !exporting) copyButtonRef.current?.focus()
+    wasExporting.current = exporting
+  }, [exporting])
+
+  // Cheap, but it is rebuilt on every plan change and nothing else; the plan ID is
+  // the identity of the whole plan, so it is the only dependency there can be.
+  const exportText = useMemo(() => toPlainText(plan, meta), [plan, meta])
+
   return (
     <div className="screen screen--plan">
       {planSet.relaxation !== null ? (
@@ -65,7 +105,7 @@ export function PlanScreen({
           relaxation={planSet.relaxation}
           shown={plan}
           vibe={vibe}
-          budget={budget}
+          budget={basics.budget}
           requested={restoreRequested}
           restored={restored}
           onRequest={onRequestRestore}
@@ -96,6 +136,17 @@ export function PlanScreen({
             </button>
           </p>
         ) : null}
+        <div className="plan-hero__actions">
+          <button
+            type="button"
+            className="btn btn--primary"
+            ref={copyButtonRef}
+            onClick={() => setExporting(true)}
+          >
+            <Icon name="copy" size={16} className="btn__glyph" />
+            Copy as text
+          </button>
+        </div>
         <p className="plan-hero__id">{planIdLine(plan, planSet.catalogueVersion)}</p>
       </div>
 
@@ -146,8 +197,17 @@ export function PlanScreen({
             selected={selectedVariant}
             onSelect={onSelectVariant}
           />
+
+          <AdjustPanel basics={basics} onApply={onAdjust} />
         </div>
       </div>
+
+      {exporting ? (
+        <ExportDialog
+          text={exportText}
+          onClose={() => setExporting(false)}
+        />
+      ) : null}
     </div>
   )
 }

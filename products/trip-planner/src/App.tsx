@@ -23,7 +23,7 @@ import { PlanScreen } from './ui/screens/PlanScreen'
  */
 
 function AppShell() {
-  const { state, dispatch, today, restored } = useSession()
+  const { state, dispatch, today, restored, replan } = useSession()
   const { phase } = state
 
   const [draftFacts, setDraftFacts] = useState<string[] | null>(null)
@@ -54,7 +54,10 @@ function AppShell() {
     phase === 'vibe' && state.vibe !== null && state.basics !== null ? state.basics : null
 
   return (
-    <div className="app">
+    // `app--plan` is what lets the 360 layout lift S5's primary action into a
+    // fixed bottom bar without leaving it on top of the provenance footer
+    // (docs/03-design.md §4 S5, the 360 row).
+    <div className={phase === 'plan' ? 'app app--plan' : 'app'}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -134,12 +137,20 @@ function AppShell() {
           <PlanScreen
             planSet={state.planSet}
             vibe={state.vibe}
-            budget={state.basics.budget}
+            basics={state.basics}
+            meta={CATALOGUE.meta}
             selectedVariant={state.selectedVariant}
             restoreRequested={state.restoreRequested}
             restored={restored}
             onAnswerDefaulted={() => dispatch({ type: 'answerDefaulted' })}
             onSelectVariant={(variant) => dispatch({ type: 'selectVariant', variant })}
+            onAdjust={(basics) => {
+              // R12 — the engine runs once, here, and the new basics and the plan
+              // they produce reach the store in one action. There is no render in
+              // between in which the screen could be half updated.
+              const planSet = replan(basics)
+              if (planSet !== null) dispatch({ type: 'adjust', basics, planSet })
+            }}
             onRequestRestore={() => dispatch({ type: 'requestRestore' })}
             onApplyRestore={(planSet) =>
               dispatch({

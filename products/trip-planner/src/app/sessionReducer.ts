@@ -59,6 +59,13 @@ export type SessionAction =
   | { type: 'skipToPlan' }
   | { type: 'answerDefaulted' }
   | { type: 'selectVariant'; variant: PlanVariant }
+  /**
+   * R12 — new basics plus the plan they produce, in one action. The engine is run
+   * by the caller (`SessionProvider.replan`) precisely so that the swap is atomic:
+   * a reducer that cleared `planSet` and left the recompute to an effect would put
+   * a half-updated screen on the way through (docs/03-design.md §4 S5, Success).
+   */
+  | { type: 'adjust'; basics: Basics; planSet: PlanSet }
   | { type: 'requestRestore' }
   | { type: 'dismissRestore' }
   | { type: 'applyRestore'; planSet: PlanSet; label: string }
@@ -203,6 +210,24 @@ export function sessionReducer(
         announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
           next.cost.partyTotal,
         )} total for ${travellersLabel(next.travellers)}.`,
+      }
+    }
+
+    // R12 — re-plan in place. The questionnaire is untouched: `answers`,
+    // `questionCursor` and the vibe are all carried through, which is what makes
+    // "without re-answering questions" true rather than merely unlikely.
+    case 'adjust': {
+      if (state.phase !== 'plan') return state
+      const next = action.planSet.recommended
+      return {
+        ...state,
+        basics: action.basics,
+        planSet: action.planSet,
+        selectedVariant: 'recommended',
+        restoreRequested: false,
+        announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
+          next.cost.partyTotal,
+        )} total for ${travellersLabel(action.basics.travellers)}.`,
       }
     }
 

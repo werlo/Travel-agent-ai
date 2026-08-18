@@ -12,7 +12,7 @@ import {
 import { CATALOGUE } from '../data/localCatalogue'
 import { canonicalise } from '../domain/hash'
 import { generatePlanSet } from '../domain/planner'
-import type { ISODate, PlanSet } from '../domain/types'
+import type { Basics, ISODate, PlanSet } from '../domain/types'
 import {
   clearSession,
   readSession,
@@ -50,6 +50,12 @@ interface SessionContextValue {
    * key forced on, so the number in the banner is the plan behind the button.
    */
   restored: PlanSet | null
+  /**
+   * R12 — the plan these basics would produce, from the answers already given.
+   * Called once, from the Apply handler, never on change: at 1,400 destinations a
+   * re-plan per keystroke is 46ms of jank (docs/02-architecture.md §7).
+   */
+  replan: (basics: Basics) => PlanSet | null
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -181,9 +187,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restoreKey, planKey])
 
+  // ------------------------------------------------------- R12, re-plan in place
+  const replan = useCallback(
+    (basics: Basics): PlanSet | null => {
+      const next = plannerRequest({ ...state, basics })
+      if (next === null) return null
+      return generatePlanSet(next.input, CATALOGUE, {
+        defaultedQuestions: next.defaultedQuestions,
+      })
+    },
+    [state],
+  )
+
   const value = useMemo<SessionContextValue>(
-    () => ({ state, dispatch, today, restored }),
-    [state, dispatch, today, restored],
+    () => ({ state, dispatch, today, restored, replan }),
+    [state, dispatch, today, restored, replan],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

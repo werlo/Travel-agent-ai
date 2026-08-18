@@ -1152,3 +1152,212 @@ h1:focus:not(:focus-visible) {
 .field__message {
   min-height: 20px;
 }
+
+/* ================================================================== slice 4 ==
+   S5 hero actions + adjust panel (R12), S6 export dialog (R17).
+   Every value is a token from tokens.css; layout follows docs/03-design.md §4.
+   ============================================================================ */
+
+/* `.btn` already sets the gap; the glyph only has to stop shrinking. */
+.btn__glyph {
+  flex: none;
+}
+
+/* ------------------------------------------------------------ hero actions */
+
+.plan-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* ------------------------------------------------------------ adjust panel */
+
+.adjust {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.adjust__set {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.adjust__legend {
+  padding: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.adjust__sub {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.adjust__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.adjust__hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* -------------------------------------------------------- S6 export dialog */
+
+.dialog {
+  width: min(560px, calc(100vw - var(--space-4) * 2));
+  max-width: 560px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+}
+
+.dialog::backdrop {
+  background: rgba(20, 32, 30, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dialog::backdrop {
+    background: rgba(0, 0, 0, 0.65);
+  }
+}
+
+.dialog[open] {
+  animation: dialog-in var(--dur-base) var(--ease);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dialog__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+}
+
+.dialog__title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.dialog__sub {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/*
+  `white-space: pre` and vertical-only scrolling: the text is going to be pasted
+  somewhere else, so it must never be wrapped or reflowed (docs/03-design.md §4 S6).
+*/
+.dialog__text {
+  width: 100%;
+  padding: var(--space-3);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  white-space: pre;
+  overflow-x: auto;
+  overflow-y: auto;
+  resize: none;
+}
+
+.dialog__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.dialog__failure {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-subtle);
+  color: var(--color-danger-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* -------------------------------------------------- slice 4 responsive rules */
+
+@media (max-width: 1023px) {
+  .plan-section--adjust {
+    order: 5;
+  }
+}
+
+@media (max-width: 599px) {
+  .adjust__fields {
+    grid-template-columns: 1fr;
+  }
+
+  /*
+    docs/03-design.md §4 S5 at 360: the primary action sits in a sticky bottom bar.
+    `position: fixed` rather than `sticky`, because the hero is only ~200px tall —
+    a sticky child of it stops being visible the moment the itinerary scrolls past,
+    which is exactly when the user most wants the action. `.app--plan` reserves the
+    strip so the bar never sits on top of the provenance footer.
+  */
+  .plan-hero__actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-sticky-actions);
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  .app--plan {
+    padding-bottom: calc(var(--tap-min) + var(--space-6));
+  }
+
+  .plan-hero__actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dialog__panel {
+    padding: var(--space-4);
+  }
+
+  .dialog__text {
+    /* 10 rows at 360 (docs/03-design.md §4 S6). */
+    height: calc(10 * 1.35em + var(--space-6));
+  }
+
+  .dialog__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+}

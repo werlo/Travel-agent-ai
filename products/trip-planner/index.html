@@ -3,6 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      docs/02-architecture.md §8. The app makes zero network requests after load,
+      so `connect-src 'none'` costs nothing and makes that a browser-enforced fact
+      rather than a claim. The Vite dev server needs its HMR socket and injects
+      inline script and style, so `vite.config.ts` relaxes exactly those three
+      directives when serving — never at build. What ships is the line below.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'none'; img-src 'self' data:"
+    />
     <title>Compass — guided trip planner</title>
     <meta
       name="description"
