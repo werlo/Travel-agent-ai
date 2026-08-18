@@ -17,7 +17,17 @@ import type { Why } from '../../domain/types'
  * mapping for `<summary>`, so UX14 can assert it and a screen reader gets the same
  * answer in every engine.
  */
-export function WhyThisTrip({ why }: { why: Why }) {
+export interface WhyThisTripProps {
+  why: Why
+  /**
+   * R29 (customer fix 3) — the same sticky one-line summary shown at the top of the
+   * page, repeated here as the opening sentence so a reader who opens this section
+   * sees the same first fact they skimmed above.
+   */
+  summaryLine: string
+}
+
+export function WhyThisTrip({ why, summaryLine }: WhyThisTripProps) {
   const [open, setOpen] = useState(true)
 
   return (
@@ -29,6 +39,8 @@ export function WhyThisTrip({ why }: { why: Why }) {
       <summary className="why__summary" aria-expanded={open}>
         Why this trip
       </summary>
+
+      <p className="why__summary-line">{summaryLine}</p>
 
       <h3 className="why__sub">Because you said</h3>
       <ul className="why__list" data-why="reasons">

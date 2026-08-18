@@ -151,6 +151,22 @@ h1:focus:not(:focus-visible) {
   padding: 0 var(--space-2);
 }
 
+/* -------------------------------------------------------- plan summary line */
+
+/*
+ * R29 (customer fix 3) — the sticky, skimmable one-line summary. It lives inside
+ * the same sticky `<header>` as the AppBar and SummaryBar, so it stays visible on
+ * load and while scrolling without a second `position: sticky` element to keep in
+ * sync with the header's own height.
+ */
+.plan-summary-line {
+  padding: var(--space-2) var(--space-6);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
 /* ---------------------------------------------------------------- provenance */
 
 .provenance {
@@ -1037,6 +1053,13 @@ h1:focus:not(:focus-visible) {
   outline: var(--focus-ring) solid var(--color-focus);
   outline-offset: var(--focus-offset);
   border-radius: var(--radius-sm);
+}
+
+.why__summary-line {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
 }
 
 .why__sub {

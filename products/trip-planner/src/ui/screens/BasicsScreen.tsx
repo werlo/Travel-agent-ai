@@ -8,7 +8,11 @@ import {
   nightsLabel,
   parseDMY,
 } from '../../domain/dates'
-import { matchDestinationsByName, type NamedDestination } from '../../domain/exclusions'
+import {
+  exclusionDisplayName,
+  matchDestinationsByName,
+  type NamedDestination,
+} from '../../domain/exclusions'
 import { CHILD_AGE_HINT, CHILD_INPUT_MAX_AGE, CHILD_INPUT_MIN_AGE } from '../../domain/party'
 import { ORIGIN_CITIES, type Basics, type ISODate } from '../../domain/types'
 import {
@@ -548,7 +552,9 @@ export function BasicsScreen({
             <ul className="excluded__list">
               {excludedDestinations.map((destination) => (
                 <li key={destination.id} className="excluded__item">
-                  <span className="excluded__name">{destination.name}</span>
+                  <span className="excluded__name">
+                    {exclusionDisplayName(destination.name)}
+                  </span>
                   <button
                     type="button"
                     className="btn btn--ghost"

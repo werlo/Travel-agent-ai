@@ -216,7 +216,10 @@ describe('not this one — somewhere else (R22)', () => {
     expect(text('.plan-hero__id')).not.toBe(before.planId)
 
     const excluded = document.querySelector('.excluded') as HTMLElement
-    expect(within(excluded).getByText(before.destination)).toBeInTheDocument()
+    // R28 — some destinations render as "Goa (covers North Goa & South Goa)"
+    // rather than their bare catalogue name, so this checks the excluded region
+    // names the destination rather than matching the name verbatim.
+    expect(excluded.textContent ?? '').toContain(before.destination)
 
     await user.click(
       within(excluded).getByRole('button', { name: `Put ${before.destination} back` }),

@@ -3,6 +3,7 @@ import {
   saverDeltaLabel,
   stretchDeltaLabel,
 } from '../../domain/budget'
+import { exclusionDisplayName } from '../../domain/exclusions'
 import { formatRupees } from '../../domain/money'
 import type { Plan, PlanSet, PlanVariant } from '../../domain/types'
 
@@ -194,7 +195,7 @@ export function Alternatives({
           <ul className="excluded__list">
             {planSet.excluded.map((destination) => (
               <li key={destination.id} className="excluded__item">
-                <span className="excluded__name">{destination.name}</span>
+                <span className="excluded__name">{exclusionDisplayName(destination.name)}</span>
                 <button
                   type="button"
                   className="btn btn--ghost"

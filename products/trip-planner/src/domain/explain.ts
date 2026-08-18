@@ -59,6 +59,14 @@ export interface ExplainInput {
   activeSpecs: readonly ConstraintSpec[]
   /** budget x 1.25; above it a destination was excluded on price. */
   ceiling: Rupees
+  /**
+   * R31 — true when `chosen` is a hand-picked destination (Saver/Stretch/reject)
+   * that replaced the ladder's own winner. An unheld answer then means "the user
+   * picked this, not the engine" rather than "the engine searched and nothing
+   * fit" — two different facts that must not share the ladder's wording, or the
+   * ladder's own reasoning about a different candidate gets attached to this one.
+   */
+  pinned?: boolean
 }
 
 /** 'west coast and lively' — Oxford-free, because these are two-item lists at most. */
@@ -71,8 +79,28 @@ function droppedText(label: string, ctx: PlanContext): string {
   return `You said ${label} — nothing in this catalogue held that for ${formatRupees(ctx.budget)}, so it counted for less than your other answers.`
 }
 
+/**
+ * R31 — the pinned case: the destination did not go unanswered because the ladder
+ * searched the catalogue, it went unanswered because the user picked this specific
+ * destination themselves (Saver, Stretch, or "Not this one — somewhere else"). The
+ * ladder's own "nothing in this catalogue held that" sentence is a claim about the
+ * whole search, and it is not true here — this is one destination, chosen on
+ * purpose, that simply does not answer an earlier question.
+ */
+function droppedPinnedText(label: string, destinationName: string): string {
+  return `You said ${label} — ${destinationName} is the plan you picked yourself, and it does not answer that.`
+}
+
 /** The honest case: we could not hold this answer, so `held` is false (R19). */
-function dropped(label: string, ctx: PlanContext): Reason {
+function dropped(label: string, ctx: PlanContext, pinnedDestinationName?: string): Reason {
+  if (pinnedDestinationName !== undefined) {
+    return {
+      quotes: label,
+      text: droppedPinnedText(label, pinnedDestinationName),
+      held: false,
+      pinnedOverride: true,
+    }
+  }
   return { quotes: label, text: droppedText(label, ctx), held: false }
 }
 
@@ -134,8 +162,9 @@ function destinationsAnswering(input: ExplainInput, specs: readonly ConstraintSp
  * to drop is reported as dropped rather than dressed up as a match.
  */
 function adaptiveReasons(input: ExplainInput): Reason[] {
-  const { graph, answers, ctx, chosen } = input
+  const { graph, answers, ctx, chosen, pinned } = input
   const out: Reason[] = []
+  const pinnedName = pinned === true ? chosen.destination.name : undefined
 
   for (const [questionId, optionId] of answers) {
     if (optionId === 'no-preference') continue
@@ -154,7 +183,7 @@ function adaptiveReasons(input: ExplainInput): Reason[] {
           held: true,
         })
       } else {
-        out.push(dropped(option.label, ctx))
+        out.push(dropped(option.label, ctx, pinnedName))
       }
       continue
     }
@@ -183,7 +212,7 @@ function adaptiveReasons(input: ExplainInput): Reason[] {
 
     // The honest case: we could not hold this answer, so we say so rather than
     // inventing a match. This is the same fact the R14 banner reports.
-    out.push(dropped(option.label, ctx))
+    out.push(dropped(option.label, ctx, pinnedName))
   }
 
   return out

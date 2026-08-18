@@ -348,6 +348,14 @@ export interface TravelLeg {
   date: ISODate
   from: string
   to: string
+  /**
+   * R30 — an indicative departure/arrival time window, drawn deterministically from
+   * a small fixed sample of clock times (`HH:MM`, 24h) rather than invented per
+   * render. The catalogue models fares and durations, not a live timetable, so this
+   * is sample data too — the R16 provenance line on the same screen covers it.
+   */
+  departs: string
+  arrives: string
 }
 
 export interface DayBlock {
@@ -400,6 +408,16 @@ export interface Reason {
    * scrolls down (customer fix 3).
    */
   held: boolean
+  /**
+   * R31 — true only when this answer went unheld because the user hand-picked a
+   * destination that does not answer it (Saver/Stretch/reject), never because the
+   * relaxation ladder searched the catalogue and found nothing. The two causes read
+   * as the same "unheld" fact but are different claims: the ladder's "nothing fits"
+   * sentence is a statement about the whole catalogue, and reusing it for a pin
+   * would apply the ladder's reasoning about a different candidate to the one the
+   * user is actually looking at (customer fix 5).
+   */
+  pinnedOverride?: boolean
 }
 
 /** R10 — a named runner-up. `line` MUST contain a numeral. */

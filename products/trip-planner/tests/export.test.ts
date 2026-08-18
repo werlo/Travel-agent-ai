@@ -135,4 +135,14 @@ describe('dayLine', () => {
     expect(first.stayEntry?.label).toContain(' — ')
     expect(dayLine(first)).not.toContain(' — Check in')
   })
+
+  it('names a departure and arrival time on every flight leg (R30, customer fix 4)', () => {
+    const first = plan.days[0]
+    if (first === undefined) throw new Error('no first day')
+    const outboundLeg = first.legs.find((leg) => leg.kind === 'outbound')
+    if (outboundLeg === undefined) throw new Error('no outbound leg')
+    expect(dayLine(first)).toContain(
+      `departs ${outboundLeg.departs}, arrives ${outboundLeg.arrives}`,
+    )
+  })
 })

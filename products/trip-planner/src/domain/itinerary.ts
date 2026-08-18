@@ -1,4 +1,5 @@
 import { addDays, formatDayLabel, nightsLabel, weekdayIndex, weekdayName, weekdayPlural } from './dates'
+import { fnv1a32 } from './hash'
 import { tagMatches } from './scoring'
 import type {
   BaseTown,
@@ -256,6 +257,53 @@ export function scheduleItinerary(
   }
 }
 
+/**
+ * R30 — a small, fixed sample of indicative departure clock times, none of them in
+ * the 00:00–05:00 window a red-eye warning would otherwise have to cover. Chosen
+ * once, deterministically, from the destination/origin/leg — the same inputs always
+ * produce the same time, which is what keeps R13's determinism claim true of the
+ * itinerary and not just the price.
+ */
+const SAMPLE_DEPARTURE_TIMES = [
+  '06:15',
+  '07:40',
+  '09:20',
+  '11:35',
+  '13:50',
+  '15:25',
+  '17:05',
+  '18:45',
+  '20:10',
+  '21:30',
+] as const
+
+function minutesOfDay(hhmm: string): number {
+  const parts = hhmm.split(':').map(Number)
+  const h = parts[0] ?? 0
+  const m = parts[1] ?? 0
+  return h * 60 + m
+}
+
+function timeOfDay(totalMinutes: number): string {
+  const wrapped = ((totalMinutes % 1440) + 1440) % 1440
+  const hh = Math.floor(wrapped / 60)
+    .toString()
+    .padStart(2, '0')
+  const mm = (wrapped % 60).toString().padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
+/** Deterministic pick from `SAMPLE_DEPARTURE_TIMES`, seeded on the leg's own facts. */
+function departureFor(destinationId: string, origin: string, kind: TravelLeg['kind']): string {
+  const seed = fnv1a32(`${destinationId}|${origin}|${kind}`)
+  const time = SAMPLE_DEPARTURE_TIMES[seed % SAMPLE_DEPARTURE_TIMES.length]
+  return time ?? SAMPLE_DEPARTURE_TIMES[0]
+}
+
+function arrivalFor(departs: string, hours: number): string {
+  return timeOfDay(minutesOfDay(departs) + Math.round(hours * 60))
+}
+
 export function buildLegs(
   destination: Destination,
   ctx: PlanContext,
@@ -265,6 +313,10 @@ export function buildLegs(
   // The leg names the destination, not the base town: you fly to Goa and drive to
   // Anjuna, and the header already says which town the plan books.
   const arrival = destination.name
+
+  const outboundDeparts = departureFor(destination.id, ctx.origin, 'outbound')
+  const returnDeparts = departureFor(destination.id, ctx.origin, 'return')
+
   return [
     {
       kind: 'outbound',
@@ -274,6 +326,8 @@ export function buildLegs(
       date: ctx.startDate,
       from: ctx.origin,
       to: arrival,
+      departs: outboundDeparts,
+      arrives: arrivalFor(outboundDeparts, fare.hours),
     },
     {
       kind: 'return',
@@ -283,6 +337,8 @@ export function buildLegs(
       date: ctx.endDate,
       from: arrival,
       to: ctx.origin,
+      departs: returnDeparts,
+      arrives: arrivalFor(returnDeparts, fare.hours),
     },
   ]
 }

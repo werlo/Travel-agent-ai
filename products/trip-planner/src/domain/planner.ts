@@ -11,6 +11,7 @@ import {
   mostImportantDropped,
   nightsConstraint,
   relaxationBanner,
+  rerollRelaxationBanner,
   satisfies,
   sortByPriority,
   vibeConstraint,
@@ -40,6 +41,7 @@ import type {
   QuestionGraph,
   Relaxation,
   Restore,
+  Rupees,
   Stay,
   Why,
 } from './types'
@@ -533,6 +535,34 @@ export interface GenerateOptions {
   defaultedQuestions?: number
 }
 
+/**
+ * R27 — true when one of the destinations the user has already turned down would,
+ * on its own, have satisfied everything the shown plan currently honours plus the
+ * constraint the ladder just dropped, within the stretch ceiling. That is exactly
+ * "a plan shown moments earlier fit fine" — the case `relaxationBanner`'s blanket
+ * "No `<x>` trip fits" claim must never paper over.
+ */
+function excludedSatisfiedDropped(
+  droppedSpec: ConstraintSpec,
+  active: readonly ConstraintSpec[],
+  ctx: PlanContext,
+  excludedIds: ReadonlySet<string>,
+  catalogue: CatalogueSnapshot,
+  ceiling: Rupees,
+): boolean {
+  if (excludedIds.size === 0) return false
+  const excludedDestinations = catalogue.destinations.filter((d) => excludedIds.has(d.id))
+  if (excludedDestinations.length === 0) return false
+  const excludedCandidates = buildCandidates(
+    { meta: catalogue.meta, destinations: excludedDestinations },
+    ctx,
+  )
+  const mustHold = [...active, droppedSpec]
+  return excludedCandidates.some(
+    (c) => c.cost.partyTotal <= ceiling && satisfies(c.destination, ctx, mustHold),
+  )
+}
+
 export function generatePlanSet(
   input: PlanInput,
   catalogue: CatalogueSnapshot,
@@ -604,6 +634,12 @@ export function generatePlanSet(
   // been excluded), the pin falls through to the natural winner and R19's
   // change notice — computed by the caller from the previous vs. next plan —
   // names the substitution instead of it happening silently.
+  // R31 — true once a hand-picked destination has actually replaced the ladder's
+  // own winner below, so `why` can tell the difference between "the engine
+  // dropped this answer while searching" and "the user picked a destination that
+  // does not hold this answer" — two different reasons that read as the same
+  // `held: false`, and only one of which is the ladder's own "nothing fits" claim.
+  let pinnedOverrideApplied = false
   if (
     externalForced.size === 0 &&
     input.pinnedDestinationId !== undefined &&
@@ -618,10 +654,11 @@ export function generatePlanSet(
     if (pinnedWinner !== null) {
       winner = pinnedWinner
       recommendedAffordable = pinnedWinner.cost.partyTotal <= ceiling
+      pinnedOverrideApplied = true
     }
   }
 
-  const why = (candidate: Candidate): Why =>
+  const why = (candidate: Candidate, pinned = false): Why =>
     explain({
       chosen: candidate,
       all: candidates,
@@ -630,6 +667,7 @@ export function generatePlanSet(
       answers: input.answers,
       activeSpecs: active,
       ceiling,
+      pinned,
     })
 
   const recommended = toPlan(
@@ -639,7 +677,7 @@ export function generatePlanSet(
     catalogue,
     'recommended',
     recommendedAffordable,
-    why(winner),
+    why(winner, pinnedOverrideApplied),
   )
 
   // R11 — the two alternatives, chosen from the same survivors the recommendation
@@ -664,12 +702,22 @@ export function generatePlanSet(
     ),
   )
 
+  // R27 — a reroll (or a pre-plan exclusion, R26) can leave the ladder needing to
+  // drop the same constraint the just-excluded destination actually satisfied. The
+  // blanket "No <x> trip fits" claim is false in exactly that case: a fitting <x>
+  // trip was on screen a moment ago. Named explicitly instead of asserted away.
+  const bannerIsReroll =
+    survivors.relaxation !== null &&
+    excludedSatisfiedDropped(survivors.relaxation.first, active, ctx, excludedIds, catalogue, ceiling)
+
   const relaxation: Relaxation | null =
     survivors.relaxation === null
       ? null
       : {
           droppedKeys: survivors.relaxation.droppedKeys,
-          banner: survivors.relaxation.banner,
+          banner: bannerIsReroll
+            ? rerollRelaxationBanner(survivors.relaxation.first, ctx)
+            : survivors.relaxation.banner,
           restore: restoreFor(
             survivors.relaxation.first,
             candidates,

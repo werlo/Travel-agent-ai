@@ -338,3 +338,76 @@ describe('R9 still holds with the whole trust layer in place', () => {
     }
   })
 })
+
+describe('the reroll-honest banner (R27, customer fix 1)', () => {
+  it('never claims no within-India option fits right after excluding one that did', () => {
+    const input = inputFor(
+      'peace',
+      {
+        'peace-region': 'within-india',
+        'peace-domestic': 'hills',
+        'peace-hill-pace': 'quiet-but-some-life',
+        'peace-comfort': 'resort',
+      },
+      {
+        startDate: '2026-12-20',
+        endDate: '2026-12-27',
+        budget: 250000,
+        travellers: 4,
+        adults: 2,
+        children: [9, 12],
+        origin: 'Mumbai',
+      },
+    )
+    const first = generatePlanSet(input, CATALOGUE)
+    expect(first.recommended.region).toBe('domestic')
+    expect(first.relaxation).toBeNull()
+
+    const rejected = first.recommended.destinationId
+    const reroll = generatePlanSet(
+      { ...input, excludeDestinationIds: [rejected] },
+      CATALOGUE,
+    )
+
+    // The blanket claim never appears: a within-India trip *did* fit, a moment ago.
+    if (reroll.relaxation !== null) {
+      expect(reroll.relaxation.banner).not.toMatch(/^No within India/)
+      expect(reroll.relaxation.banner).not.toMatch(/^No .* within India .* trip fits/)
+    }
+
+    // The rejected, previously-fitting plan is named in the comparison list, with
+    // an undo — never silently dropped.
+    expect(reroll.excluded.map((d) => d.id)).toContain(rejected)
+  })
+
+  it('names the dropped preference explicitly when a reroll genuinely has to relax it', () => {
+    const input = inputFor(
+      'peace',
+      {
+        'peace-region': 'within-india',
+        'peace-domestic': 'hills',
+        'peace-hill-pace': 'quiet-but-some-life',
+        'peace-comfort': 'resort',
+      },
+      {
+        startDate: '2026-12-20',
+        endDate: '2026-12-27',
+        budget: 250000,
+        travellers: 4,
+        adults: 2,
+        children: [9, 12],
+        origin: 'Mumbai',
+      },
+    )
+    const first = generatePlanSet(input, CATALOGUE)
+    const reroll = generatePlanSet(
+      { ...input, excludeDestinationIds: [first.recommended.destinationId] },
+      CATALOGUE,
+    )
+    expect(reroll.relaxation).not.toBeNull()
+    // The reroll-honest wording names what was asked for and says "nothing else"
+    // rather than a blanket "nothing fits".
+    expect(reroll.relaxation!.banner).toMatch(/^You asked for /)
+    expect(reroll.relaxation!.banner).toContain('nothing else')
+  })
+})

@@ -8,6 +8,7 @@ import { vibeLabel } from './domain/vibes'
 import { AppBar } from './ui/components/AppBar'
 import { ErrorBoundary } from './ui/components/ErrorBoundary'
 import { ProvenanceLine } from './ui/components/ProvenanceLine'
+import { planSummaryLine } from './ui/format'
 import { VibeScreen } from './ui/screens/VibeScreen'
 import { BasicsScreen } from './ui/screens/BasicsScreen'
 import { QuestionScreen } from './ui/screens/QuestionScreen'
@@ -53,6 +54,14 @@ function AppShell() {
   const resumable =
     phase === 'vibe' && state.vibe !== null && state.basics !== null ? state.basics : null
 
+  // R29 (customer fix 3) — the sticky, skimmable one-line summary, shown only once
+  // there is a plan on screen. The same string opens "Why this trip" (`PlanScreen`).
+  const shownPlan =
+    phase === 'plan' && state.planSet !== null
+      ? (state.planSet[state.selectedVariant] ?? state.planSet.recommended)
+      : null
+  const planSummary = shownPlan === null ? null : planSummaryLine(shownPlan)
+
   // R26 — the full catalogue, for the "Anywhere except…" matcher, plus the
   // currently-excluded ids resolved back to names for the per-entry undo list.
   // This is the same `state.excluded` R22's post-plan reject reads and writes.
@@ -74,6 +83,7 @@ function AppShell() {
         sticky={phase !== 'vibe'}
         summaryFacts={phase === 'vibe' ? null : facts}
         onStartOver={state.vibe === null ? null : startOver}
+        planSummary={planSummary}
       />
       <main id="main" className="app__main" ref={mainRef}>
         {phase === 'vibe' ? (

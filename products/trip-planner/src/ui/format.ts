@@ -29,8 +29,9 @@ const MODE_DETAIL = {
   road: 'on the road',
 } as const
 
+/** R30 — `Fly Mumbai → Bagdogra, departs 09:20, arrives 11:35`. */
 export function legLabel(leg: TravelLeg): string {
-  return `${MODE_VERB[leg.mode]} ${leg.from} → ${leg.to}`
+  return `${MODE_VERB[leg.mode]} ${leg.from} → ${leg.to}, departs ${leg.departs}, arrives ${leg.arrives}`
 }
 
 export function legDetail(leg: TravelLeg): string {
@@ -66,6 +67,30 @@ export function planFacts(plan: Plan): string {
     `from ${plan.origin}`,
     `based in ${plan.baseName}`,
   ].join(' · ')
+}
+
+/**
+ * R29 (customer fix 3) — `North Goa · ₹1,76,100 · ₹2,00,100 under budget`. One line,
+ * skimmable, reused verbatim in two places: a sticky strip above the itinerary and
+ * the opening sentence of "Why this trip" (`WhyThisTrip`), so a reader who skims the
+ * sticky line and one who reads the accordion see the same first fact.
+ */
+export function planSummaryLine(plan: Plan): string {
+  return `${plan.destinationName} · ${formatRupees(plan.cost.partyTotal)} · ${budgetPhrase(plan.budget)}`
+}
+
+function budgetPhrase(budget: Plan['budget']): string {
+  switch (budget.status) {
+    case 'on-budget':
+      return 'on budget'
+    case 'within':
+      return `${formatRupees(budget.delta)} under budget`
+    case 'stretch':
+    case 'no-fit':
+      return `${formatRupees(-budget.delta)} over budget`
+    default:
+      return budget.label
+  }
 }
 
 /** `Plan KOCH-5N-2P-B60-a41c · catalogue 2026-08-01`. */

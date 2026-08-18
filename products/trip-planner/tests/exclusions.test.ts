@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CATALOGUE } from '../src/data/localCatalogue'
-import { matchDestinationsByName } from '../src/domain/exclusions'
+import { exclusionDisplayName, matchDestinationsByName } from '../src/domain/exclusions'
 import { generatePlanSet } from '../src/domain/planner'
 import { defaultWalk } from '../src/domain/questions/path'
 import { QUESTION_GRAPH } from '../src/domain/questions/graph'
@@ -42,6 +42,17 @@ describe('matching a typed name against the catalogue', () => {
   it('matches every destination containing the substring', () => {
     // Kochi & Varkala is the only catalogue name containing "kochi".
     expect(matchDestinationsByName(catalogue, 'kochi').map((m) => m.id)).toEqual(['in-varkala'])
+  })
+})
+
+describe('the exclusion chip names every known variant (R28)', () => {
+  it('renders "North Goa" as "Goa (covers North Goa & South Goa)"', () => {
+    expect(exclusionDisplayName('North Goa')).toBe('Goa (covers North Goa & South Goa)')
+  })
+
+  it('leaves a destination with no known variants unchanged', () => {
+    expect(exclusionDisplayName('Kochi & Varkala')).toBe('Kochi & Varkala')
+    expect(exclusionDisplayName('Manali & Solang')).toBe('Manali & Solang')
   })
 })
 

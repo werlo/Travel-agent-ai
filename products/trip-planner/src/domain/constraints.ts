@@ -163,6 +163,25 @@ export function relaxationBanner(dropped: ConstraintSpec, ctx: PlanContext): str
   return `No ${descriptor} trip fits ${formatRupees(ctx.budget)} for ${ctx.travellers} — ${dropped.relaxNote}.`
 }
 
+/**
+ * R27 — the reroll-honest banner. "Not this one — somewhere else" (R22) narrows the
+ * search by excluding the destination the user just turned down, and that can leave
+ * the same relaxation ladder needing to drop the same constraint the *previous*,
+ * now-excluded plan actually satisfied. `relaxationBanner`'s "No `<x>` trip fits"
+ * reads as a claim about the whole catalogue; it is not one here, because a fitting
+ * `<x>` trip was on screen a moment ago and the user is the one who removed it. This
+ * sentence says so instead of repeating the blanket claim (customer fix 1).
+ */
+export function rerollRelaxationBanner(dropped: ConstraintSpec, ctx: PlanContext): string {
+  const vibe = VIBE_LABELS[ctx.vibe].toLowerCase()
+  const descriptor = dropped.key === 'vibe' ? vibe : `${dropped.label} ${vibe}`
+  return (
+    `You asked for ${dropped.label} — nothing else ${descriptor} fits ${formatRupees(
+      ctx.budget,
+    )} for ${ctx.travellers}, so ${dropped.relaxNote}.`
+  )
+}
+
 export function keysOf(specs: readonly ConstraintSpec[]): ConstraintKey[] {
   return specs.map((spec) => spec.key)
 }

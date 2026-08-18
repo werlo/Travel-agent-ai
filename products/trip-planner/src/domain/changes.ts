@@ -49,11 +49,17 @@ function overriddenAnswerClauses(plan: Plan): string[] {
     label.charAt(0).toLowerCase() + label.slice(1)
   return plan.why.reasons
     .filter((reason) => !reason.held)
-    .map(
-      (reason) =>
-        `you asked for ${midSentence(reason.quotes)} — nothing fits ${formatRupees(
-          budget,
-        )} for ${plan.travellers}, so this is ${plan.destinationName}`,
+    .map((reason) =>
+      // R31 — a pinned destination did not lose this answer to the relaxation
+      // ladder searching the catalogue; the user picked it themselves. Reusing the
+      // ladder's "nothing fits" sentence here would attach a claim about the whole
+      // catalogue — reasoning that belongs to a different candidate — to the one
+      // hand-picked plan actually on screen.
+      reason.pinnedOverride === true
+        ? `you picked ${plan.destinationName} yourself, which does not answer ${midSentence(reason.quotes)}`
+        : `you asked for ${midSentence(reason.quotes)} — nothing fits ${formatRupees(
+            budget,
+          )} for ${plan.travellers}, so this is ${plan.destinationName}`,
     )
 }
 
@@ -93,7 +99,12 @@ export function changeNotice({ previous, next }: ChangeNoticeInput): string | nu
   const overridden = overriddenAnswerClauses(next)
   if (overridden.length > 0) {
     clauses.push(...overridden)
-    budgetDriven = true
+    // R31 — a pin-driven override is the user's own choice, not the engine
+    // giving up something to stay inside budget; only the ladder-driven case
+    // earns the "kept you inside budget" framing.
+    if (next.why.reasons.some((reason) => !reason.held && reason.pinnedOverride !== true)) {
+      budgetDriven = true
+    }
   }
 
   if (clauses.length === 0) return null

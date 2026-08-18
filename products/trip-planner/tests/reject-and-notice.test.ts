@@ -177,3 +177,40 @@ describe('saying what changed (R19)', () => {
     expect(notice).toContain('₹80,000')
   })
 })
+
+describe('internal-consistency of the generated reasoning (R31, customer fix 5)', () => {
+  it('never applies another destination\'s category label to a hand-picked destination', () => {
+    // Kabir's fixture: North Goa hand-picked as the Saver after a "city" question
+    // it does not answer, for a party of 9 down to 7 — the exact scenario that
+    // produced "you asked for a city — nothing fits ₹4,50,000 for 7, so this is
+    // North Goa", a sentence that reads as though North Goa were a city.
+    const input = inputFor(
+      'party',
+      { 'party-region': 'within-india', 'party-domestic': 'city' },
+      { travellers: 9, adults: 9 },
+    )
+    const northGoa = CATALOGUE.destinations.find((d) => d.name === 'North Goa')
+    if (northGoa === undefined) throw new Error('fixture requires North Goa in the catalogue')
+
+    const pinnedInput = { ...input, pinnedDestinationId: northGoa.id }
+    const pinned = generatePlanSet(pinnedInput, CATALOGUE)
+    expect(pinned.recommended.destinationName).toBe('North Goa')
+
+    const adjustedInput = { ...pinnedInput, basics: { ...pinnedInput.basics, travellers: 7, adults: 7 } }
+    const adjusted = generatePlanSet(adjustedInput, CATALOGUE)
+    expect(adjusted.recommended.destinationName).toBe('North Goa')
+
+    for (const plan of [pinned.recommended, adjusted.recommended]) {
+      const notice = changeNotice({ previous: null, next: plan, planSet: plan === pinned.recommended ? pinned : adjusted })
+      // The unheld "A city" answer is reported as the user's own pick, not as a
+      // catalogue-wide "nothing fits" claim that happens to land on North Goa.
+      const cityReason = plan.why.reasons.find((r) => r.quotes === 'A city')
+      expect(cityReason?.held).toBe(false)
+      expect(cityReason?.pinnedOverride).toBe(true)
+      expect(cityReason?.text).not.toContain('nothing fits')
+      if (notice !== null) {
+        expect(notice).not.toMatch(/nothing fits.*so this is North Goa/)
+      }
+    }
+  })
+})

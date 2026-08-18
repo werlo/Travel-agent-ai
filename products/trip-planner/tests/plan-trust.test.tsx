@@ -110,6 +110,32 @@ describe('Why this trip (R10, R19)', () => {
   })
 })
 
+describe('the sticky results summary (R29, customer fix 3)', () => {
+  it('is visible on load and reads destination · total · budget position', async () => {
+    await planFor('Beach', [])
+
+    const sticky = screen.getByTestId('plan-summary-line')
+    const destination = text('.plan-hero__title')
+    const total = text('.plan-hero__total').replace(' total', '')
+    expect(sticky.textContent).toContain(destination)
+    expect(sticky.textContent).toContain(total)
+  })
+
+  it('lives inside the sticky header, so it stays on screen while the page scrolls', async () => {
+    await planFor('Beach', [])
+    const sticky = screen.getByTestId('plan-summary-line')
+    expect(sticky.closest('.appbar-region--sticky')).not.toBeNull()
+  })
+
+  it('is repeated as the opening line inside "Why this trip"', async () => {
+    await planFor('Beach', [])
+    const sticky = screen.getByTestId('plan-summary-line').textContent
+    const why = document.querySelector('.why') as HTMLElement
+    const opening = why.querySelector('.why__summary-line')?.textContent
+    expect(opening).toBe(sticky)
+  })
+})
+
 describe('the alternatives (R11)', () => {
   it('switches the itinerary, the breakdown, the budget line and the plan ID together', async () => {
     const user = await planFor('Beach', [])

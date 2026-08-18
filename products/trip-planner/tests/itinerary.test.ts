@@ -13,7 +13,7 @@ import {
 } from '../src/domain/itinerary'
 import { roomsFor } from '../src/domain/money'
 import { SEASONS } from '../src/domain/season'
-import type { Destination, PlanContext, Stay } from '../src/domain/types'
+import type { Destination, OriginCity, PlanContext, Stay } from '../src/domain/types'
 
 /**
  * Customer refinement round 1: R18 (never state a false day-of-week), R7 as
@@ -228,5 +228,40 @@ describe('a free day, and no padding (R21)', () => {
         }
       }
     }
+  })
+})
+
+describe('an indicative departure/arrival window on every leg (R30, customer fix 4)', () => {
+  it('gives both legs a departs and arrives time, consistent with the fare duration', () => {
+    for (const d of CATALOGUE.destinations) {
+      for (const origin of Object.keys(d.fares) as OriginCity[]) {
+        const ctx = contextFor('2026-10-10', '2026-10-15', { origin })
+        const [outbound, inbound] = buildLegs(d, ctx)
+        for (const leg of [outbound, inbound]) {
+          expect(leg.departs).toMatch(/^\d{2}:\d{2}$/)
+          expect(leg.arrives).toMatch(/^\d{2}:\d{2}$/)
+        }
+      }
+    }
+  })
+
+  it('never departs between 00:00 and 05:00', () => {
+    for (const d of CATALOGUE.destinations) {
+      for (const origin of Object.keys(d.fares) as OriginCity[]) {
+        const ctx = contextFor('2026-10-10', '2026-10-15', { origin })
+        const [outbound, inbound] = buildLegs(d, ctx)
+        for (const leg of [outbound, inbound]) {
+          const [hh] = leg.departs.split(':').map(Number)
+          expect(hh, `${d.id}/${origin}/${leg.kind}`).toBeGreaterThanOrEqual(5)
+        }
+      }
+    }
+  })
+
+  it('is deterministic: the same destination, origin and leg always gets the same time', () => {
+    const ctx = contextFor('2026-10-10', '2026-10-15', { origin: 'Bengaluru' })
+    const a = buildLegs(goa, ctx)
+    const b = buildLegs(goa, ctx)
+    expect(a).toEqual(b)
   })
 })

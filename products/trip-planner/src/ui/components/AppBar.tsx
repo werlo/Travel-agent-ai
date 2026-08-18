@@ -11,9 +11,16 @@ export interface AppBarProps {
   sticky: boolean
   summaryFacts: readonly string[] | null
   onStartOver: (() => void) | null
+  /**
+   * R29 (customer fix 3) — the plan-outcome line ('North Goa · ₹1,76,100 ·
+   * ₹2,00,100 under budget'), shown only on the plan screen. It lives inside the
+   * same sticky header as the SummaryBar so it stays visible on load and while
+   * scrolling, without a second independently-positioned sticky element.
+   */
+  planSummary?: string | null
 }
 
-export function AppBar({ sticky, summaryFacts, onStartOver }: AppBarProps) {
+export function AppBar({ sticky, summaryFacts, onStartOver, planSummary = null }: AppBarProps) {
   return (
     <header className={sticky ? 'appbar-region appbar-region--sticky' : 'appbar-region'}>
       <div className="appbar">
@@ -28,6 +35,11 @@ export function AppBar({ sticky, summaryFacts, onStartOver }: AppBarProps) {
         ) : null}
       </div>
       <SummaryBar facts={summaryFacts} />
+      {planSummary !== null ? (
+        <p className="plan-summary-line" data-testid="plan-summary-line" role="status">
+          {planSummary}
+        </p>
+      ) : null}
     </header>
   )
 }

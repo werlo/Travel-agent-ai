@@ -21,8 +21,9 @@ const MODE_VERB = {
   road: 'Drive',
 } as const
 
+/** R30 — `Fly Mumbai → Bagdogra, departs 09:20, arrives 11:35 (2h 15m)`. */
 function legText(leg: TravelLeg): string {
-  return `${MODE_VERB[leg.mode]} ${leg.from} → ${leg.to} (${formatDuration(leg.hours)})`
+  return `${MODE_VERB[leg.mode]} ${leg.from} → ${leg.to}, departs ${leg.departs}, arrives ${leg.arrives} (${formatDuration(leg.hours)})`
 }
 
 /**
