@@ -34,6 +34,10 @@ export function canonicalise(input: PlanInput, catalogueVersion: string): string
   // R22 — turning a destination down is a different plan, and its ID says so.
   const excludedIds = [...(input.excludeDestinationIds ?? [])].sort()
   const excludedPart = excludedIds.length === 0 ? '' : `|excluded:${excludedIds.join(',')}`
+  // R11/R12 — a hand-picked destination is a different plan, and its ID says so,
+  // even when nothing else about the answers changed.
+  const pinnedPart =
+    input.pinnedDestinationId === undefined ? '' : `|pinned:${input.pinnedDestinationId}`
   return ([
     `v1`,
     `cat:${catalogueVersion}`,
@@ -47,7 +51,7 @@ export function canonicalise(input: PlanInput, catalogueVersion: string): string
     `origin:${basics.origin}`,
     `freeday:${basics.freeDay === true ? '1' : '0'}`,
     `answers:${answerPart}`,
-  ].join('|') + forcedPart + excludedPart)
+  ].join('|') + forcedPart + excludedPart + pinnedPart)
 }
 
 /** Four base-36 characters of the hash — enough to distinguish, short enough to read. */

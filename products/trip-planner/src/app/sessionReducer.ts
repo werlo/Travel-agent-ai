@@ -45,6 +45,14 @@ export interface SessionState {
   branchChanged: boolean
   /** R22 — destination ids the user has turned down, in the order they did. */
   excluded: readonly string[]
+  /**
+   * R11/R12 — the destination the user hand-picked (Saver/Stretch selected, or
+   * what survived a reject), so an adjust re-plan or a reload prices that
+   * candidate rather than silently reverting to the engine's own top pick.
+   * `null` means nothing has been hand-picked — the plan on screen is whatever
+   * the engine recommends on its own.
+   */
+  pinnedDestinationId: string | null
   /** R22 — the catalogue ran out of destinations that fit. */
   rejectExhausted: boolean
   /**
@@ -100,6 +108,7 @@ export const initialState: SessionState = {
   restoreRequested: false,
   branchChanged: false,
   excluded: [],
+  pinnedDestinationId: null,
   rejectExhausted: false,
   changeNotice: null,
   errors: {},
@@ -126,6 +135,7 @@ export function sessionReducer(
         selectedVariant: 'recommended',
         restoreRequested: false,
         excluded: [],
+        pinnedDestinationId: null,
         rejectExhausted: false,
         changeNotice: null,
       }
@@ -149,6 +159,7 @@ export function sessionReducer(
         planSet: null,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: null,
         announcement: '',
       }
     }
@@ -173,6 +184,7 @@ export function sessionReducer(
         planSet: null,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: null,
         branchChanged:
           previous !== undefined && previous !== action.optionId && oldNext !== newNext,
         phase: done ? 'generating' : 'question',
@@ -196,6 +208,7 @@ export function sessionReducer(
         planSet: null,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: null,
       }
 
     case 'resume': {
@@ -215,6 +228,7 @@ export function sessionReducer(
         questionCursor: null,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: null,
         // R19 — on a first render there is nothing to compare against, but an
         // answer the ladder had to drop is still a change the user did not make.
         changeNotice: changeNotice({
@@ -226,6 +240,10 @@ export function sessionReducer(
 
     // R11 — switching alternative rewires the whole screen, because every region of
     // it reads `planSet[selectedVariant]`. There is no partial update to get wrong.
+    // Picking a Saver/Stretch also pins that destination (R11/R12): a later adjust
+    // keeps pricing it rather than reverting to the engine's own top pick. Picking
+    // `recommended` back is the user explicitly asking for the engine's own choice
+    // again, so it clears the pin.
     case 'selectVariant': {
       const { planSet } = state
       if (planSet === null) return state
@@ -234,6 +252,7 @@ export function sessionReducer(
       return {
         ...state,
         selectedVariant: action.variant,
+        pinnedDestinationId: action.variant === 'recommended' ? null : next.destinationId,
         announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
           next.cost.partyTotal,
         )} total for ${travellersLabel(next.travellers)}.`,
@@ -243,6 +262,14 @@ export function sessionReducer(
     // R12 — re-plan in place. The questionnaire is untouched: `answers`,
     // `questionCursor` and the vibe are all carried through, which is what makes
     // "without re-answering questions" true rather than merely unlikely.
+    //
+    // R11/R12 — `action.planSet` was generated with `pinnedDestinationId` set from
+    // this same `state.pinnedDestinationId` (see `selectors.plannerRequest`), so
+    // `recommended` here already *is* the hand-picked candidate whenever it could
+    // still be scheduled. The pin only moves when it genuinely could not be (the
+    // fallback the ladder actually used), and the change notice below is what
+    // says so — it is never left pointing at a destination other than the one
+    // now in the `<h1>`.
     case 'adjust': {
       if (state.phase !== 'plan') return state
       const next = action.planSet.recommended
@@ -254,6 +281,7 @@ export function sessionReducer(
         selectedVariant: 'recommended',
         restoreRequested: false,
         rejectExhausted: false,
+        pinnedDestinationId: state.pinnedDestinationId === null ? null : next.destinationId,
         changeNotice: changeNotice({ previous: shown, next, planSet: action.planSet }),
         announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
           next.cost.partyTotal,
@@ -263,6 +291,8 @@ export function sessionReducer(
 
     // R22 — the trip survives the rejection: dates, budget, travellers, origin and
     // every answer are carried straight through, and only the search narrows.
+    // R11 — whatever survives the rejection becomes the hand-picked plan: a later
+    // adjust keeps pricing it rather than the engine's unconstrained top pick.
     case 'rejectDestination': {
       if (state.phase !== 'plan') return state
       const shown = state.planSet?.[state.selectedVariant] ?? state.planSet?.recommended ?? null
@@ -276,6 +306,7 @@ export function sessionReducer(
         rejectExhausted: false,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: next.destinationId,
         changeNotice: changeNotice({ previous: shown, next, planSet: action.planSet }),
         announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
           next.cost.partyTotal,
@@ -296,6 +327,7 @@ export function sessionReducer(
         rejectExhausted: false,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: null,
         changeNotice: null,
         announcement: `Plan updated. ${next.destinationName}, ${formatRupees(
           next.cost.partyTotal,
@@ -317,6 +349,7 @@ export function sessionReducer(
         planSet: action.planSet,
         selectedVariant: 'recommended',
         restoreRequested: false,
+        pinnedDestinationId: null,
         announcement: `Showing the ${action.label} plan. ${
           action.planSet.recommended.destinationName
         }, ${formatRupees(action.planSet.recommended.cost.partyTotal)} total.`,
@@ -337,6 +370,7 @@ export function sessionReducer(
             : session.selectedVariant,
         planSet: session.planSet,
         excluded: session.excluded,
+        pinnedDestinationId: session.pinnedDestinationId,
         rejectExhausted: false,
         changeNotice: null,
         restoreRequested: false,

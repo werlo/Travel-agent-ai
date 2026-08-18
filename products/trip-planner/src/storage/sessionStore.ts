@@ -46,6 +46,12 @@ export interface PersistedSession {
   planSet: PlanSet | null
   /** R22 — destination ids the user turned down, in the order they did. */
   excluded: readonly string[]
+  /**
+   * R11/R12 — the hand-picked destination (Saver/Stretch selected, or what
+   * survived a reject), if any, so a reload restores the hand-picked plan
+   * rather than the engine's default.
+   */
+  pinnedDestinationId: string | null
 }
 
 export interface ReadResult {
@@ -245,6 +251,21 @@ export function readSession(catalogueVersion: string): ReadResult {
     excluded: Array.isArray(parsed.excluded)
       ? parsed.excluded.filter((id): id is string => typeof id === 'string')
       : [],
+    pinnedDestinationId: str(parsed.pinnedDestinationId),
+  }
+
+  // A pin that names a destination not actually in this session's plan set is
+  // untrustworthy (tampering, or a plan that failed to narrow) — dropped rather
+  // than risking a pin pointing at nothing.
+  if (session.pinnedDestinationId !== null) {
+    const known = session.planSet === null
+      ? []
+      : [
+          session.planSet.recommended.destinationId,
+          session.planSet.saver?.destinationId,
+          session.planSet.stretch?.destinationId,
+        ]
+    if (!known.includes(session.pinnedDestinationId)) session.pinnedDestinationId = null
   }
 
   // A phase that its own data cannot support is walked back rather than rendered.

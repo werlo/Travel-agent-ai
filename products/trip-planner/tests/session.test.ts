@@ -180,6 +180,7 @@ describe('the session at rest (R15)', () => {
       selectedVariant: 'recommended',
       planSet: null,
       excluded: [],
+      pinnedDestinationId: null,
       ...overrides,
     }
     writeSession(session)
@@ -355,6 +356,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       selectedVariant: 'saver',
       planSet,
       excluded: [],
+      pinnedDestinationId: null,
     })
 
     const restored = readSession(CATALOGUE.meta.version).session
@@ -379,6 +381,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       selectedVariant: 'recommended',
       planSet: gutted as unknown as PlanSet,
       excluded: [],
+      pinnedDestinationId: null,
     })
 
     const restored = readSession(CATALOGUE.meta.version).session
@@ -399,6 +402,7 @@ describe('the trust layer at rest and in the reducer (R11, R14)', () => {
       selectedVariant: 'recommended',
       planSet: corrupt as unknown as PlanSet,
       excluded: [],
+      pinnedDestinationId: null,
     })
 
     const restored = readSession(CATALOGUE.meta.version).session

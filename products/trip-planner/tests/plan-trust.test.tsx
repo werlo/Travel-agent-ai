@@ -191,16 +191,18 @@ describe('the relaxation banner (R14)', () => {
     const banner = document.querySelector('.plan-relax') as HTMLElement
     expect(banner).not.toBeNull()
     expect(within(banner).getByText('We changed one thing to make this work')).toBeInTheDocument()
+    // R25 — at ₹25,000 for 4 nothing both fits the budget AND clears the
+    // party-affinity floor, so the ladder gives up region *and* the floor
+    // itself; the banner names the vibe rather than silently substituting a
+    // low-affinity destination with no explanation at all.
     expect(
-      within(banner).getByText(
-        'No international party trip fits ₹25,000 for 4 — we searched within India instead.',
-      ),
+      within(banner).getByText('No party trip fits ₹25,000 for 4 — we widened the search.'),
     ).toBeInTheDocument()
 
     // One control, and it is not a dismiss.
     const buttons = within(banner).getAllByRole('button')
     expect(buttons).toHaveLength(1)
-    expect(buttons[0]).toHaveTextContent('Put international back')
+    expect(buttons[0]).toHaveTextContent('Put party back')
 
     // R14 still shows a plan.
     expect(text('.plan-hero__title').length).toBeGreaterThan(0)
@@ -213,12 +215,14 @@ describe('the relaxation banner (R14)', () => {
     const relaxedId = text('.plan-hero__id')
 
     const banner = () => document.querySelector('.plan-relax') as HTMLElement
-    await user.click(within(banner()).getByRole('button', { name: 'Put international back' }))
+    await user.click(within(banner()).getByRole('button', { name: 'Put party back' }))
 
-    expect(within(banner()).getByText('With international back in')).toBeInTheDocument()
+    expect(within(banner()).getByText('With party back in')).toBeInTheDocument()
     const body = banner().querySelector('.banner__body')?.textContent ?? ''
+    // R25 — putting the vibe back means a genuinely party-fit destination
+    // (>= 3/5), which at this budget is still over ₹25,000 for 4.
     expect(body).toMatch(
-      /^The cheapest international party trip for 4 over these dates is ₹[\d,]+ — ₹[\d,]+ over your budget\.$/,
+      /^The cheapest party trip for 4 over these dates is ₹[\d,]+ — ₹[\d,]+ over your budget\.$/,
     )
     const quoted = Number((body.match(/is (₹[\d,]+)/)?.[1] ?? '').replace(/[^\d]/g, ''))
     expect(quoted).toBeGreaterThan(relaxedTotal)
@@ -232,10 +236,13 @@ describe('the relaxation banner (R14)', () => {
 
     await waitFor(() => expect(amount('total')).toBe(quoted))
     expect(text('.plan-hero__id')).not.toBe(relaxedId)
-    // The plan really is international now, so nothing was relaxed to get it.
+    // The restored plan genuinely clears the vibe floor (it is what was
+    // deliberately searched for), so its own destination rates >= 3/5 for
+    // Party even though the plan is now over budget — no further relaxation
+    // banner is needed to explain a low-affinity substitute.
     expect(document.querySelector('.plan-relax')).toBeNull()
     expect(
-      screen.getByText(/^Showing the international plan\. .+, ₹[\d,]+ total\.$/),
+      screen.getByText(/^Showing the party plan\. .+, ₹[\d,]+ total\.$/),
     ).toBeInTheDocument()
   })
 
@@ -244,7 +251,7 @@ describe('the relaxation banner (R14)', () => {
     const relaxedTotal = amount('total')
 
     const banner = () => document.querySelector('.plan-relax') as HTMLElement
-    await user.click(within(banner()).getByRole('button', { name: 'Put international back' }))
+    await user.click(within(banner()).getByRole('button', { name: 'Put party back' }))
     await user.click(within(banner()).getByRole('button', { name: /^Keep the ₹/ }))
 
     expect(amount('total')).toBe(relaxedTotal)

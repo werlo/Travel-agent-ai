@@ -95,6 +95,13 @@ export function plannerRequest(
       basics: state.basics,
       answers: walk.pairs,
       excludeDestinationIds: state.excluded,
+      // R11/R12 — carried straight from the persisted session, so replan/reload
+      // both keep pricing the hand-picked candidate rather than the engine's
+      // unconstrained top pick. Omitted entirely (not `undefined`) so it plays
+      // nicely with `exactOptionalPropertyTypes`.
+      ...(state.pinnedDestinationId === null
+        ? {}
+        : { pinnedDestinationId: state.pinnedDestinationId }),
     },
     defaultedQuestions: walk.defaulted,
   }

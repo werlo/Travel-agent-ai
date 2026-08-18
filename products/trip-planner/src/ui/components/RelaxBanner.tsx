@@ -25,14 +25,20 @@ export function restoredSentence(
   budget: Rupees,
   nights: number,
 ): string {
-  const { label } = relaxation.restore
+  const { key, label } = relaxation.restore
   const total = relaxation.restore.total
+  // R25 — when the restored constraint *is* the vibe, its own label already
+  // names the vibe ('party'), so the sentence would otherwise double the word
+  // ('party party trip').
+  const isVibe = key === 'vibe'
+  const descriptor = isVibe ? vibeLabel(vibe).toLowerCase() : `${label} ${vibeLabel(vibe).toLowerCase()}`
   if (total === null) {
-    return `Nothing in this catalogue is ${label} for ${nightsLabel(nights)} with ${travellersLabel(
+    const fit = isVibe ? `a fit for ${vibeLabel(vibe).toLowerCase()}` : label
+    return `Nothing in this catalogue is ${fit} for ${nightsLabel(nights)} with ${travellersLabel(
       travellers,
     )} — the plan below is the closest we have.`
   }
-  const head = `The cheapest ${label} ${vibeLabel(vibe).toLowerCase()} trip for ${travellers} over these dates is ${formatRupees(total)}`
+  const head = `The cheapest ${descriptor} trip for ${travellers} over these dates is ${formatRupees(total)}`
   const gap = total - budget
   if (gap > 0) return `${head} — ${formatRupees(gap)} over your budget.`
   if (gap < 0) return `${head} — ${formatRupees(-gap)} under your budget.`

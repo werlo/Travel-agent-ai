@@ -487,4 +487,13 @@ export interface PlanInput {
    * 'somewhere else' is genuinely a different plan.
    */
   excludeDestinationIds?: readonly string[]
+  /**
+   * R11/R12 — a destination the user hand-picked (by choosing the Saver/Stretch
+   * alternative, or by what survived a "Not this one" reject). When it can still
+   * be scheduled, it is what `recommended` names — never silently replaced by
+   * whatever the unconstrained engine would otherwise pick. Part of the plan ID
+   * hash, so two different hand-picked plans with the same answers are two
+   * different plan IDs.
+   */
+  pinnedDestinationId?: string
 }

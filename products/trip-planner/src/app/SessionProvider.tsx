@@ -92,6 +92,7 @@ function initFromStorage(): SessionState {
         : session.selectedVariant,
     planSet: session.planSet,
     excluded: session.excluded,
+    pinnedDestinationId: session.pinnedDestinationId,
   }
 }
 
@@ -119,6 +120,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       selectedVariant: state.selectedVariant,
       planSet: state.planSet,
       excluded: state.excluded,
+      pinnedDestinationId: state.pinnedDestinationId,
     }
     const ok = writeSession(session)
     if (!ok && !persistenceFailed.current) {
@@ -209,7 +211,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const replanExcluding = useCallback(
     (excluded: readonly string[]): PlanSet | null => {
-      const next = plannerRequest({ ...state, excluded })
+      // R11/R22 — reject and undo-reject both search fresh: whatever was
+      // pinned belonged to the search *before* this narrowing (or widening)
+      // changed, and the reducer sets a new pin from the result (see
+      // `sessionReducer`'s `rejectDestination`/`undoReject`). Carrying the old
+      // pin through here would make "Not this one" occasionally do nothing —
+      // or "Put X back" resurface the wrong destination — because the stale
+      // pin would keep forcing its own destination back in regardless of the
+      // excluded set.
+      const next = plannerRequest({ ...state, excluded, pinnedDestinationId: null })
       if (next === null) return null
       // The last destination cannot be turned down: the screen says the catalogue
       // is exhausted and keeps the plan it has (R22).

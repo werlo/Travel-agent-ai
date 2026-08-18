@@ -13,6 +13,7 @@ import {
   relaxationBanner,
   satisfies,
   sortByPriority,
+  vibeConstraint,
   withPathPriorities,
 } from './constraints'
 import { nightsBetween } from './dates'
@@ -193,6 +194,62 @@ function violationCount(
   return n
 }
 
+/** Which of `ordered` a candidate satisfies — the mirror of `violationCount`,
+ * used to build the banner from whichever candidate actually ends up shown. */
+function activeFor(
+  ordered: readonly ConstraintSpec[],
+  droppable: readonly ConstraintSpec[],
+  candidate: Candidate,
+  ctx: PlanContext,
+): ConstraintSpec[] {
+  const violates = new Set(droppable.filter((spec) => !spec.test(candidate.destination, ctx)))
+  return ordered.filter((spec) => !violates.has(spec))
+}
+
+/** The R14 banner + restore control, built from whatever `active` a shown
+ * winner actually leaves standing. Shared by `survive` (the first guess) and
+ * `stableSurvive`'s loop (each subsequent one), so the two can never compute a
+ * banner two different ways for the same candidate. */
+function relaxationForActive(
+  ordered: readonly ConstraintSpec[],
+  active: readonly ConstraintSpec[],
+  ctx: PlanContext,
+): LadderRelaxation | null {
+  const dropped = ordered.filter((spec) => !active.includes(spec))
+  const first = mostImportantDropped(ordered, active)
+  if (first === null) return null
+  return {
+    dropped,
+    first,
+    droppedKeys: dropped.map((spec) => spec.key),
+    banner: relaxationBanner(first, ctx),
+  }
+}
+
+/**
+ * The cheapest candidate that satisfies every spec in `mustHold`. Ceiling-bound
+ * first; with `allowOverCeiling` (R14's restore preview only — never the main
+ * recommendation), falls back to the cheapest that satisfies `mustHold`
+ * regardless of price, mirroring `cheapestHonouring`'s "never a dead end" rule
+ * so the restore control can honestly say what putting a constraint back would
+ * cost even when that number is itself over the stretch ceiling.
+ */
+function cheapestSatisfying(
+  candidates: readonly Candidate[],
+  ctx: PlanContext,
+  ceiling: number,
+  mustHold: readonly ConstraintSpec[],
+  allowOverCeiling = false,
+): Candidate | null {
+  const capped = candidates.filter(
+    (c) => c.cost.partyTotal <= ceiling && satisfies(c.destination, ctx, mustHold),
+  )
+  if (capped.length > 0) return cheapestOf(capped)
+  if (!allowOverCeiling) return null
+  const uncapped = candidates.filter((c) => satisfies(c.destination, ctx, mustHold))
+  return uncapped.length > 0 ? cheapestOf(uncapped) : null
+}
+
 /**
  * The ladder (fixed round F1, architecture review §2 / D2). It used to drop the
  * single most-recent answer, refilter, and drop the *next* most-recent one if
@@ -232,18 +289,6 @@ function survive(
   const poolFor = (active: readonly ConstraintSpec[]): Candidate[] =>
     candidates.filter((c) => satisfies(c.destination, ctx, active) && c.cost.partyTotal <= ceiling)
 
-  const relaxationFor = (active: readonly ConstraintSpec[]): LadderRelaxation | null => {
-    const dropped = ordered.filter((spec) => !active.includes(spec))
-    const first = mostImportantDropped(ordered, active)
-    if (first === null) return null
-    return {
-      dropped,
-      first,
-      droppedKeys: dropped.map((spec) => spec.key),
-      banner: relaxationBanner(first, ctx),
-    }
-  }
-
   // Every affordable candidate that at least honours what is never dropped
   // (budget/dates/travellers, plus anything R14's restore control forced back),
   // scored by how many droppable constraints it still fails.
@@ -259,26 +304,22 @@ function survive(
     return { pool: poolFor(ordered), active: ordered, affordable: true, relaxation: null }
   }
 
-  // Ties at the minimum go to the cheapest — the same tie-break `cheapestOf`
-  // uses everywhere else — so the constraint set that gets sacrificed is always
-  // the one a real, affordable trip actually needed to sacrifice.
-  let cheapest: Candidate | null = null
-  for (const c of eligible) {
-    if (violationCount(c, ctx, droppable) !== minViolations) continue
-    if (
-      cheapest === null ||
-      c.cost.partyTotal < cheapest.cost.partyTotal ||
-      (c.cost.partyTotal === cheapest.cost.partyTotal &&
-        c.destination.id.localeCompare(cheapest.destination.id) < 0)
-    ) {
-      cheapest = c
-    }
-  }
-  const winnerViolates = new Set(
-    droppable.filter((spec) => !spec.test(cheapest!.destination, ctx)),
-  )
-  const active = ordered.filter((spec) => !winnerViolates.has(spec))
-  return { pool: poolFor(active), active, affordable: true, relaxation: relaxationFor(active) }
+  // R25 — with two independently droppable *kinds* of thing (the vibe floor and
+  // a graph answer/region) active at once, more than one candidate can tie at
+  // the same minimal violation count while disagreeing about *which* spec they
+  // each fail (one might fail only the vibe floor, another only a graph
+  // answer). Restricting the pool to whichever one candidate happened to be
+  // cheapest — and then separately letting `pickWinner` choose by *score* from
+  // that already-narrowed pool — let the shown plan and the banner disagree
+  // about what was actually given up. The pool here is every eligible
+  // candidate tied at the minimum, full stop; which single constraint set gets
+  // named in the banner is decided by the same rule `pickWinner` will use on
+  // this exact pool (score when nothing is forced, cheapest when something is),
+  // so the banner can never describe a different plan than the one on screen.
+  const tied = eligible.filter((c) => violationCount(c, ctx, droppable) === minViolations)
+  const representative = (forced.size === 0 ? bestOf(tied) : cheapestOf(tied))!
+  const active = activeFor(ordered, droppable, representative, ctx)
+  return { pool: tied, active, affordable: true, relaxation: relaxationForActive(ordered, active, ctx) }
 }
 
 /**
@@ -335,15 +376,32 @@ function pickWinner(
  * The fix: whenever the shown recommendation is dominated — a plan exists that
  * is no more expensive AND keeps the dropped constraint — prefer honouring the
  * constraint. Recompute with it held mandatory and check again; droppable specs
- * are few (≤ ~7 on any path), so this converges in a handful of rounds. Once a
- * constraint is folded in this way the search never abandons it again — `forced`
- * only grows — so the loop is monotone and terminates.
+ * are few (≤ ~7 on any path), so this converges in a handful of rounds.
+ *
+ * R25 — with two independently droppable *kinds* of thing (the vibe floor and
+ * a graph answer/region), the naive version of this loop — re-run the whole
+ * ladder fresh with one more key forced, keep going if it is cheaper — could
+ * wander past a genuinely-better fixed point: forcing back the answer the
+ * shown plan gave up could only be satisfied by a *different* destination that
+ * then failed the vibe floor too, which the loop happily accepted purely
+ * because it was cheaper, ending up further from the user's answers than
+ * necessary. The fix is `cheapestSatisfying`: each round only ever asks for
+ * the cheapest candidate that keeps *everything the current winner already
+ * has* (`active`) plus the one constraint being restored — never a fresh,
+ * independent search that is free to trade a held constraint for a dropped
+ * one. Because every accepted candidate's own violations are therefore a
+ * strict subset of what came before, the drop set only ever shrinks and the
+ * loop is monotone in both cost and constraint count.
  */
 function stableSurvive(
   candidates: readonly Candidate[],
   ctx: PlanContext,
   specs: readonly ConstraintSpec[],
 ): { survivors: Survivors; winner: Candidate; forced: ReadonlySet<ConstraintKey> } {
+  const ceiling = stretchCeiling(ctx.budget)
+  const ordered = sortByPriority(specs)
+  const droppable = ordered.filter(isDroppable)
+
   let forced = new Set<ConstraintKey>()
   let survivors = survive(candidates, ctx, specs, forced)
   let winner = pickWinner(survivors, candidates, ctx, specs, forced)
@@ -352,17 +410,27 @@ function stableSurvive(
   }
 
   for (let guard = 0; guard < specs.length && survivors.relaxation !== null; guard += 1) {
-    const droppedKey = survivors.relaxation.first.key
-    const nextForced = new Set(forced)
-    nextForced.add(droppedKey)
-    const restoredSurvivors = survive(candidates, ctx, specs, nextForced)
-    const restoredWinner = pickWinner(restoredSurvivors, candidates, ctx, specs, nextForced)
+    const droppedSpec = survivors.relaxation.first
+    const mustHold = [...survivors.active, droppedSpec]
+    const restoredWinner = cheapestSatisfying(candidates, ctx, ceiling, mustHold)
     if (restoredWinner === null || restoredWinner.cost.partyTotal > winner.cost.partyTotal) {
       break
     }
-    forced = nextForced
-    survivors = restoredSurvivors
+    forced = new Set([...forced, droppedSpec.key])
     winner = restoredWinner
+    const active = activeFor(ordered, droppable, winner, ctx)
+    survivors = {
+      ...survivors,
+      // Every candidate that now clears the same bar the winner does — the
+      // same broadened pool `survive` itself would build at this level — so
+      // the Saver/Stretch alternatives stay genuine options, not just echoes
+      // of this one candidate.
+      pool: candidates.filter(
+        (c) => c.cost.partyTotal <= ceiling && satisfies(c.destination, ctx, active),
+      ),
+      active,
+      relaxation: relaxationForActive(ordered, active, ctx),
+    }
   }
 
   return { survivors, winner, forced }
@@ -380,18 +448,22 @@ function restoreFor(
   spec: ConstraintSpec,
   candidates: readonly Candidate[],
   ctx: PlanContext,
-  specs: readonly ConstraintSpec[],
   shownTotal: number,
-  baseForced: ReadonlySet<ConstraintKey> = new Set(),
+  /**
+   * R25 — everything the shown plan already honours. "Put X back" means keep
+   * all of that and add X, never quote a plan that is only cheaper because it
+   * quietly gave up something else the shown plan got right. With a single
+   * droppable dimension that could never happen (there was nothing else *to*
+   * give up); with two independent ones — the vibe floor and a graph
+   * answer/region — a plain "cheapest candidate that satisfies X" search can
+   * wander into a destination that fails a *different* constraint instead,
+   * which is exactly the false "cheaper" the F1 fix (`restore.costDelta < 0`)
+   * exists to rule out.
+   */
+  held: readonly ConstraintSpec[],
 ): Restore {
-  const forced = new Set<ConstraintKey>([...baseForced, spec.key])
-  const winner = pickWinner(
-    survive(candidates, ctx, specs, forced),
-    candidates,
-    ctx,
-    specs,
-    forced,
-  )
+  const ceiling = stretchCeiling(ctx.budget)
+  const winner = cheapestSatisfying(candidates, ctx, ceiling, [...held, spec], true)
 
   return {
     key: spec.key,
@@ -490,6 +562,7 @@ export function generatePlanSet(
 
   const specs = [
     nightsConstraint(),
+    vibeConstraint(input.vibe),
     ...withPathPriorities(constraintsFor(graph, input.answers)),
   ]
   const externalForced = new Set<ConstraintKey>(input.forceConstraints ?? [])
@@ -500,12 +573,10 @@ export function generatePlanSet(
   // caller already knows exactly what plan it is asking for, unchanged.
   let survivors: Survivors
   let winner: Candidate
-  let forced: ReadonlySet<ConstraintKey>
   if (externalForced.size === 0) {
     const stable = stableSurvive(candidates, ctx, specs)
     survivors = stable.survivors
     winner = stable.winner
-    forced = stable.forced
   } else {
     survivors = survive(candidates, ctx, specs, externalForced)
     const externalWinner = pickWinner(survivors, candidates, ctx, specs, externalForced)
@@ -513,11 +584,43 @@ export function generatePlanSet(
       throw new Error('[compass] E-PLANNER-EMPTY: no candidate survived the ladder')
     }
     winner = externalWinner
-    forced = externalForced
   }
   const { pool, active, affordable } = survivors
+  // Separate from `affordable` (which gates whether the *natural* pool is used
+  // for the Saver/Stretch alternatives, unaffected by a pin): the budget line
+  // on `recommended` itself has to reflect whichever candidate actually ends up
+  // there.
+  let recommendedAffordable = affordable
 
   const ceiling = stretchCeiling(ctx.budget)
+
+  // R11/R12 — a hand-picked destination (Saver/Stretch selected, or what
+  // survived a "Not this one — somewhere else" reject) pins the recommendation.
+  // The natural ladder run above still supplies the alternatives pool and any
+  // relaxation banner; only the plan actually shown as `recommended` is
+  // overridden, and only when the caller is not already asking for a specific
+  // forced plan (R14's restore preview). If the pinned destination genuinely
+  // cannot be scheduled any more (its nights no longer fit the trip, or it has
+  // been excluded), the pin falls through to the natural winner and R19's
+  // change notice — computed by the caller from the previous vs. next plan —
+  // names the substitution instead of it happening silently.
+  if (
+    externalForced.size === 0 &&
+    input.pinnedDestinationId !== undefined &&
+    input.pinnedDestinationId !== winner.destination.id
+  ) {
+    const pinnedCandidates = candidates.filter(
+      (c) =>
+        c.destination.id === input.pinnedDestinationId &&
+        nightsConstraint().test(c.destination, ctx),
+    )
+    const pinnedWinner = bestOf(pinnedCandidates)
+    if (pinnedWinner !== null) {
+      winner = pinnedWinner
+      recommendedAffordable = pinnedWinner.cost.partyTotal <= ceiling
+    }
+  }
+
   const why = (candidate: Candidate): Why =>
     explain({
       chosen: candidate,
@@ -529,7 +632,15 @@ export function generatePlanSet(
       ceiling,
     })
 
-  const recommended = toPlan(winner, ctx, input, catalogue, 'recommended', affordable, why(winner))
+  const recommended = toPlan(
+    winner,
+    ctx,
+    input,
+    catalogue,
+    'recommended',
+    recommendedAffordable,
+    why(winner),
+  )
 
   // R11 — the two alternatives, chosen from the same survivors the recommendation
   // came from, so a Saver can never be a plan the user's answers already excluded.
@@ -563,9 +674,8 @@ export function generatePlanSet(
             survivors.relaxation.first,
             candidates,
             ctx,
-            specs,
             winner.cost.partyTotal,
-            forced,
+            active,
           ),
         }
 

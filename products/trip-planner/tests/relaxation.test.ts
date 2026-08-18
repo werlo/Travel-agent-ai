@@ -10,6 +10,7 @@ import {
   satisfies,
   sortByPriority,
   tagConstraint,
+  vibeConstraint,
   withPathPriorities,
 } from '../src/domain/constraints'
 import { generatePlanSet, planContextFor } from '../src/domain/planner'
@@ -51,6 +52,9 @@ function inputFor(
 function specsFor(input: PlanInput) {
   return [
     nightsConstraint(),
+    // R25 — the engine always includes the vibe-affinity floor; mirrored here so
+    // this test's own drop order matches what `generatePlanSet` actually computes.
+    vibeConstraint(input.vibe),
     ...withPathPriorities(constraintsFor(QUESTION_GRAPH, input.answers)),
   ]
 }
@@ -82,11 +86,12 @@ describe('the documented drop order (A9)', () => {
     const ordered = sortByPriority(specsFor(input))
     expect(ordered.map((s) => [s.key, s.priority])).toEqual([
       ['dates', PRIORITY.dates],
+      ['vibe', PRIORITY.vibe],
       ['region', PRIORITY.region],
       ['q:beach-coast', PRIORITY.question + 1],
       ['q:beach-crowd', PRIORITY.question + 2],
     ])
-    expect(dropOrder(ordered)).toEqual(['q:beach-crowd', 'q:beach-coast', 'region'])
+    expect(dropOrder(ordered)).toEqual(['q:beach-crowd', 'q:beach-coast', 'region', 'vibe'])
   })
 
   it('drops exactly a prefix of the drop order, for every vibe at every budget', () => {
@@ -145,28 +150,34 @@ describe("the PRD's own dead-end case", () => {
     { budget: 25000, travellers: 4, endDate: '2026-10-12' },
   )
 
+  // R25 — at this budget nothing both fits ₹25,000 for 4 AND clears the >= 3/5
+  // party-affinity floor (the cheapest genuinely-partyish candidate is North Goa
+  // at ₹64,000, well over the ceiling), so the ladder has to give up both the
+  // region answer and the vibe floor itself to find anything at all — the same
+  // shape of bug the architecture review flagged (D1: Ella at 1/5 for Party):
+  // the difference R25 makes is that this is now said out loud in the banner
+  // instead of happening silently.
   it('returns a plan with a non-null relaxation rather than nothing', () => {
     const planSet = generatePlanSet(input, CATALOGUE)
     expect(planSet.relaxation).not.toBeNull()
     expect(planSet.recommended.destinationName.length).toBeGreaterThan(0)
     expect(planSet.recommended.days.length).toBe(3)
     expect(planSet.relaxation!.banner).toBe(
-      'No international party trip fits ₹25,000 for 4 — we searched within India instead.',
+      'No party trip fits ₹25,000 for 4 — we widened the search.',
     )
-    expect(planSet.relaxation!.droppedKeys).toEqual(['region'])
+    expect(planSet.relaxation!.droppedKeys).toEqual(['vibe', 'region'])
   })
 
-  it('prices the restore control in rupees', () => {
+  it('names the vibe as the most important thing it gave up', () => {
     const planSet = generatePlanSet(input, CATALOGUE)
     const { restore } = planSet.relaxation!
-    expect(restore.key).toBe('region')
-    expect(restore.label).toBe('international')
+    expect(restore.key).toBe('vibe')
     expect(restore.total).not.toBeNull()
     expect(restore.costDelta).toBe(restore.total! - planSet.recommended.cost.partyTotal)
     expect(restore.costDelta!).toBeGreaterThan(0)
   })
 
-  it('answers the restore with the exact plan the banner quoted', () => {
+  it('answers the restore with a plan that actually clears the floor', () => {
     const planSet = generatePlanSet(input, CATALOGUE)
     const { restore } = planSet.relaxation!
 
@@ -175,13 +186,15 @@ describe("the PRD's own dead-end case", () => {
       CATALOGUE,
     )
     expect(restored.recommended.cost.partyTotal).toBe(restore.total)
-    // The whole point: it really is international this time.
-    expect(restored.recommended.region).toBe('international')
+    const destination = CATALOGUE.destinations.find(
+      (d) => d.id === restored.recommended.destinationId,
+    )!
+    expect(destination.vibeAffinity.party).toBeGreaterThanOrEqual(3)
     // A different plan, so a different plan ID (R13).
     expect(restored.recommended.planId).not.toBe(planSet.recommended.planId)
   })
 
-  it('is the cheapest international option, not merely an international one', () => {
+  it('is the cheapest option that clears the floor, not merely one that does', () => {
     const planSet = generatePlanSet(input, CATALOGUE)
     const { restore } = planSet.relaxation!
     const ctx = { nights: 2 }
@@ -189,7 +202,7 @@ describe("the PRD's own dead-end case", () => {
       ...CATALOGUE.destinations
         .filter(
           (d) =>
-            d.region === 'international' &&
+            d.vibeAffinity.party >= 3 &&
             ctx.nights >= d.minNights &&
             ctx.nights <= d.maxNights,
         )
@@ -203,8 +216,51 @@ describe("the PRD's own dead-end case", () => {
         ),
     )
     // Experiences are the only line this rough sum leaves out, so the engine's
-    // figure can only be >= it; what matters is that no cheaper region exists.
+    // figure can only be >= it; what matters is that no cheaper party-fit place
+    // exists.
     expect(restore.total!).toBeGreaterThanOrEqual(cheapest)
+  })
+})
+
+describe('the vibe-affinity floor (R25)', () => {
+  it('never recommends, offers, or rerolls to a destination rated below 3/5 for the chosen vibe', () => {
+    for (const vibe of VIBE_ORDER) {
+      const input = inputFor(vibe, {}, { budget: 200000, travellers: 2 })
+      let planSet = generatePlanSet(input, CATALOGUE)
+      const excluded: string[] = []
+      for (let reroll = 0; reroll < 6; reroll += 1) {
+        const shown = [planSet.recommended, planSet.saver, planSet.stretch].filter(
+          (p): p is NonNullable<typeof p> => p !== null,
+        )
+        for (const plan of shown) {
+          const destination = CATALOGUE.destinations.find((d) => d.id === plan.destinationId)!
+          // A plan that had to give up the vibe floor says so in its own
+          // relaxation banner; every other plan on screen has to clear it.
+          if (planSet.relaxation?.droppedKeys.includes('vibe')) continue
+          expect(
+            destination.vibeAffinity[vibe],
+            `${vibe} reroll ${reroll}: ${destination.name}`,
+          ).toBeGreaterThanOrEqual(3)
+        }
+        excluded.push(planSet.recommended.destinationId)
+        const remaining = CATALOGUE.destinations.filter((d) => !excluded.includes(d.id))
+        if (remaining.length === 0) break
+        planSet = generatePlanSet({ ...input, excludeDestinationIds: excluded }, CATALOGUE)
+      }
+    }
+  })
+
+  // The architecture review's own regression case: Beach, rerolled, must never
+  // surface Manali or Gangtok (both low affinity for Beach).
+  it('never surfaces Manali or Gangtok for Beach across five rerolls', () => {
+    const input = inputFor('beach', {}, { budget: 200000, travellers: 2 })
+    let planSet = generatePlanSet(input, CATALOGUE)
+    const excluded: string[] = []
+    for (let reroll = 0; reroll < 5; reroll += 1) {
+      expect(planSet.recommended.destinationName).not.toMatch(/Manali|Gangtok/)
+      excluded.push(planSet.recommended.destinationId)
+      planSet = generatePlanSet({ ...input, excludeDestinationIds: excluded }, CATALOGUE)
+    }
   })
 })
 

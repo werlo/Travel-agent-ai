@@ -8,6 +8,7 @@ import type {
   DestinationTag,
   PlanContext,
   Region,
+  Vibe,
 } from './types'
 
 /**
@@ -43,6 +44,31 @@ export function regionConstraint(region: Region): ConstraintSpec {
       region === 'domestic'
         ? `${d.country}, and you asked to stay within India — ${formatDuration(d.fares[ctx.origin].hours)} in the air`
         : `inside India, and you asked to go international — ${formatDuration(d.fares[ctx.origin].hours)} in the air`,
+  }
+}
+
+/**
+ * R25 — the vibe-affinity floor. §4.5 always declared `PRIORITY.vibe` and the
+ * `vibe` key; the spec that tests it was simply never built, so nothing ever
+ * dropped it and the engine could recommend a destination rated 1/5 for the
+ * chosen vibe with no banner (architecture review D1). Hard cut at >= 3/5 (A18):
+ * the existing `vibeAffinity x 20` term in `scoring.ts` stays as the soft signal
+ * among destinations that already clear the floor.
+ */
+export const VIBE_AFFINITY_FLOOR = 3
+
+export function vibeConstraint(vibe: Vibe): ConstraintSpec {
+  return {
+    key: 'vibe',
+    // Lower-cased so it reads naturally both mid-sentence ('Put beach back')
+    // and in the banner, which special-cases the `vibe` key to avoid doubling
+    // the word (see `relaxationBanner`).
+    label: VIBE_LABELS[vibe].toLowerCase(),
+    priority: PRIORITY.vibe,
+    test: (d) => d.vibeAffinity[vibe] >= VIBE_AFFINITY_FLOOR,
+    relaxNote: 'we widened the search',
+    rejectNote: (d) =>
+      `rated ${d.vibeAffinity[vibe]} out of 5 for ${VIBE_LABELS[vibe]}, below the ${VIBE_AFFINITY_FLOOR} we look for`,
   }
 }
 
@@ -130,7 +156,11 @@ export function satisfies(
  */
 export function relaxationBanner(dropped: ConstraintSpec, ctx: PlanContext): string {
   const vibe = VIBE_LABELS[ctx.vibe].toLowerCase()
-  return `No ${dropped.label} ${vibe} trip fits ${formatRupees(ctx.budget)} for ${ctx.travellers} — ${dropped.relaxNote}.`
+  // R25 — when the vibe itself is what the ladder dropped, its own label
+  // *is* the vibe name, so the sentence reads 'No beach trip fits ...' rather
+  // than doubling the word ('No beach beach trip fits ...').
+  const descriptor = dropped.key === 'vibe' ? vibe : `${dropped.label} ${vibe}`
+  return `No ${descriptor} trip fits ${formatRupees(ctx.budget)} for ${ctx.travellers} — ${dropped.relaxNote}.`
 }
 
 export function keysOf(specs: readonly ConstraintSpec[]): ConstraintKey[] {

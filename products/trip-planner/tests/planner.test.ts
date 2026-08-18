@@ -227,6 +227,9 @@ describe('constraints and the relaxation ladder (R4, R14)', () => {
 
   it('relaxes the least important constraint instead of dead-ending', () => {
     // The PRD's own dead-end case: international + party + tiny budget for four.
+    // R25 — at this budget nothing both fits ₹25,000 for 4 and clears the
+    // vibe-affinity floor either, so the ladder gives up region *and* the
+    // floor (see tests/relaxation.test.ts, "the PRD's own dead-end case").
     const { input } = inputFor(
       'party',
       { 'party-region': 'international' },
@@ -237,9 +240,10 @@ describe('constraints and the relaxation ladder (R4, R14)', () => {
     expect(planSet.recommended.days.length).toBeGreaterThan(0)
     expect(planSet.relaxation).not.toBeNull()
     expect(planSet.relaxation!.banner).toBe(
-      'No international party trip fits ₹25,000 for 4 — we searched within India instead.',
+      'No party trip fits ₹25,000 for 4 — we widened the search.',
     )
     expect(planSet.relaxation!.droppedKeys).toContain('region')
+    expect(planSet.relaxation!.droppedKeys).toContain('vibe')
   })
 
   it('never asserts a universal the catalogue disproves (R14, fix round F1)', () => {
