@@ -42,6 +42,18 @@ export const MAX_MINUTES_FROM_BASE = 90
 /** docs/03-design.md §4 S5 — a day with nothing on it says so, in words. */
 export const FREE_DAY_NOTE = 'Nothing scheduled — this day is yours'
 
+/**
+ * R7 / R21 (fix round F1) — a day left empty because the base town ran out of
+ * things to do is NOT the same event as a day the user asked to leave free, and it
+ * must not read as one: crediting the user with a choice they did not make is
+ * exactly the false statement this fix exists to remove. `<base>` and `<n>` are the
+ * catalogue's own numbers, so the sentence cannot drift from the data that caused it.
+ */
+export function supplyShortfallNote(baseName: string, poolSize: number, days: number): string {
+  const thing = poolSize === 1 ? 'thing' : 'things'
+  return `Nothing scheduled here — ${baseName} has ${poolSize} ${thing} to do and this trip is ${days} days`
+}
+
 /** 1 on each travel day, 2 on the others for trips of a week or less, 1 beyond that. */
 export function experiencesPerDay(ctx: PlanContext): number[] {
   const counts: number[] = []
@@ -120,6 +132,11 @@ export interface Itinerary {
   perDay: readonly (readonly Experience[])[]
   /** R18 — fixed-day experiences we refused to place on the wrong day. */
   unscheduled: readonly UnscheduledNote[]
+  /** The day index (R21) emptied *because the user ticked the box*, or null. */
+  requestedFreeDay: number | null
+  /** How many experiences this (destination × stay) pair can reach at all — the
+   * number the supply-shortfall sentence quotes so it can never drift from C3. */
+  poolSize: number
 }
 
 function unscheduledLine(experience: Experience, weekday: number, reason: string): string {
@@ -137,7 +154,13 @@ export function scheduleItinerary(
   ctx: PlanContext,
 ): Itinerary {
   const base = baseFor(destination, stay)
-  const capacity = experiencesPerDay(ctx)
+  // Schedule against the FULL capacity first, free day or not. Zeroing a day's
+  // capacity up front only reduces demand, and when supply is already the tighter
+  // constraint (the thin bases below), reducing demand further changes nothing —
+  // the same items simply repack onto the days that are left, which is B6. The
+  // free day is removed as a separate step below, by deleting whatever landed on
+  // it rather than ever asking for less of it.
+  const capacity = experiencesPerDay({ ...ctx, freeDay: false })
   const perDay: Experience[][] = capacity.map(() => [])
   const dates: string[] = []
   for (let i = 0; i < ctx.days; i += 1) dates.push(addDays(ctx.startDate, i))
@@ -211,15 +234,25 @@ export function scheduleItinerary(
     }
   }
 
-  const sorted = perDay.map((day) =>
+  const sorted: Experience[][] = perDay.map((day) =>
     [...day].sort((a, b) => SLOT_ORDER[a.slot] - SLOT_ORDER[b.slot]),
   )
+
+  // ---- the free day, on request only (R21). Whatever landed here is dropped
+  // outright, never handed to another day — a repack is not a reduction, and R21
+  // requires the total to strictly fall by the removed day's own experience cost.
+  const requestedFreeDay = freeDayIndex(ctx)
+  if (requestedFreeDay !== null) {
+    sorted[requestedFreeDay] = []
+  }
 
   return {
     base,
     perDay: sorted,
     chosen: sorted.flat(),
     unscheduled,
+    requestedFreeDay,
+    poolSize: pool.length,
   }
 }
 
@@ -286,7 +319,12 @@ export function buildDays(
         : isLast
           ? { label: `Check out — ${stay.name}`, detail: '' }
           : null,
-      note: experiences.length === 0 && !isFirst && !isLast ? FREE_DAY_NOTE : null,
+      note:
+        experiences.length === 0 && !isFirst && !isLast
+          ? index === itinerary.requestedFreeDay
+            ? FREE_DAY_NOTE
+            : supplyShortfallNote(itinerary.base.name, itinerary.poolSize, ctx.days)
+          : null,
     })
   }
 

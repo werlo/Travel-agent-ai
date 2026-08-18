@@ -181,12 +181,40 @@ interface Survivors {
   affordable: boolean
 }
 
+/** How many of `droppable` a candidate fails to satisfy — the size of the drop
+ * set naming that candidate would require. */
+function violationCount(
+  candidate: Candidate,
+  ctx: PlanContext,
+  droppable: readonly ConstraintSpec[],
+): number {
+  let n = 0
+  for (const spec of droppable) if (!spec.test(candidate.destination, ctx)) n += 1
+  return n
+}
+
 /**
- * The ladder: filter → if empty, drop the highest-priority-number constraint →
- * refilter → repeat. `budget`, `dates` and `travellers` are never dropped; graph
- * answers go first, most recent first (A9). If the ladder exhausts and nothing is
- * inside the stretch band, the caller falls back to the cheapest plan in the whole
- * catalogue — there is no empty state in this product.
+ * The ladder (fixed round F1, architecture review §2 / D2). It used to drop the
+ * single most-recent answer, refilter, and drop the *next* most-recent one if
+ * that still came up empty — accumulating drops in a fixed order and never
+ * reconsidering the choice. That produced a banner naming the wrong constraint
+ * whenever the fixed order was not the minimal, cheapest one: R14's own worked
+ * example (party/city/9/₹4,50,000) dropped "city nightlife" (the more recent
+ * answer) when dropping "a city" instead would have reached North Goa, ₹15,600
+ * *cheaper* — the arithmetic impossibility that proved the old banner false
+ * (`restore.costDelta` went negative).
+ *
+ * The fix asks the catalogue directly instead of guessing an order: for every
+ * candidate, count how many droppable constraints it actually fails. The
+ * smallest such count, over the whole catalogue, is the fewest concessions any
+ * real trip needs — and among candidates tied at that count, the cheapest one
+ * decides which constraints get named as dropped. Whatever the banner names was
+ * therefore genuinely unavoidable at the minimum cost, which is what makes
+ * `restore.costDelta < 0` structurally impossible: restoring a constraint can
+ * only narrow the search that produced the original winner, never widen it (see
+ * `tests/planner.test.ts`, "the relaxation banner never lies"). `budget`, `dates`
+ * and `travellers` are never dropped. This is one pass over the (≤ 42) candidate
+ * list per call — microseconds, not a search over combinations.
  */
 function survive(
   candidates: readonly Candidate[],
@@ -198,42 +226,59 @@ function survive(
   const ordered = sortByPriority(specs)
   const canDrop = (spec: ConstraintSpec): boolean =>
     isDroppable(spec) && !forced.has(spec.key)
+  const kept = ordered.filter((spec) => !canDrop(spec))
   const droppable = ordered.filter(canDrop)
-  let active = ordered
 
-  for (let round = 0; round <= droppable.length; round += 1) {
-    const pool = candidates.filter(
-      (c) =>
-        satisfies(c.destination, ctx, active) && c.cost.partyTotal <= ceiling,
-    )
-    if (pool.length > 0) {
-      const dropped = ordered.filter((spec) => !active.includes(spec))
-      // `ordered` runs most-important-first, so the head of `dropped` is the
-      // biggest thing we gave up — that is what the banner has to name.
-      const first = mostImportantDropped(ordered, active)
-      return {
-        pool,
-        active,
-        affordable: true,
-        relaxation:
-          first === null
-            ? null
-            : {
-                dropped,
-                first,
-                droppedKeys: dropped.map((spec) => spec.key),
-                banner: relaxationBanner(first, ctx),
-              },
-      }
+  const poolFor = (active: readonly ConstraintSpec[]): Candidate[] =>
+    candidates.filter((c) => satisfies(c.destination, ctx, active) && c.cost.partyTotal <= ceiling)
+
+  const relaxationFor = (active: readonly ConstraintSpec[]): LadderRelaxation | null => {
+    const dropped = ordered.filter((spec) => !active.includes(spec))
+    const first = mostImportantDropped(ordered, active)
+    if (first === null) return null
+    return {
+      dropped,
+      first,
+      droppedKeys: dropped.map((spec) => spec.key),
+      banner: relaxationBanner(first, ctx),
     }
-    // Drop the least important constraint still standing: the highest priority
-    // number, which is the most recent graph answer.
-    const victim = [...active].reverse().find(canDrop)
-    if (victim === undefined) break
-    active = active.filter((spec) => spec !== victim)
   }
 
-  return { pool: [], active, relaxation: null, affordable: false }
+  // Every affordable candidate that at least honours what is never dropped
+  // (budget/dates/travellers, plus anything R14's restore control forced back),
+  // scored by how many droppable constraints it still fails.
+  const eligible = candidates.filter(
+    (c) => c.cost.partyTotal <= ceiling && satisfies(c.destination, ctx, kept),
+  )
+  if (eligible.length === 0) {
+    return { pool: [], active: kept, relaxation: null, affordable: false }
+  }
+
+  const minViolations = Math.min(...eligible.map((c) => violationCount(c, ctx, droppable)))
+  if (minViolations === 0) {
+    return { pool: poolFor(ordered), active: ordered, affordable: true, relaxation: null }
+  }
+
+  // Ties at the minimum go to the cheapest — the same tie-break `cheapestOf`
+  // uses everywhere else — so the constraint set that gets sacrificed is always
+  // the one a real, affordable trip actually needed to sacrifice.
+  let cheapest: Candidate | null = null
+  for (const c of eligible) {
+    if (violationCount(c, ctx, droppable) !== minViolations) continue
+    if (
+      cheapest === null ||
+      c.cost.partyTotal < cheapest.cost.partyTotal ||
+      (c.cost.partyTotal === cheapest.cost.partyTotal &&
+        c.destination.id.localeCompare(cheapest.destination.id) < 0)
+    ) {
+      cheapest = c
+    }
+  }
+  const winnerViolates = new Set(
+    droppable.filter((spec) => !spec.test(cheapest!.destination, ctx)),
+  )
+  const active = ordered.filter((spec) => !winnerViolates.has(spec))
+  return { pool: poolFor(active), active, affordable: true, relaxation: relaxationFor(active) }
 }
 
 /**
@@ -277,6 +322,53 @@ function pickWinner(
 }
 
 /**
+ * The un-forced recommendation, made stable against R14's own restore control
+ * (fix round F1, architecture review §2).
+ *
+ * `bestOf` picks by score, and `WEIGHT.budgetFit` deliberately rewards a plan
+ * that spends closer to the budget — so it can pick something more expensive
+ * than the cheapest candidate satisfying the very constraint the ladder just
+ * dropped. When that happens, the banner's restore control offers a *cheaper*
+ * plan than the one on screen for putting a requirement *back*, which is the
+ * exact self-disproof the architecture review caught (`restore.costDelta < 0`).
+ *
+ * The fix: whenever the shown recommendation is dominated — a plan exists that
+ * is no more expensive AND keeps the dropped constraint — prefer honouring the
+ * constraint. Recompute with it held mandatory and check again; droppable specs
+ * are few (≤ ~7 on any path), so this converges in a handful of rounds. Once a
+ * constraint is folded in this way the search never abandons it again — `forced`
+ * only grows — so the loop is monotone and terminates.
+ */
+function stableSurvive(
+  candidates: readonly Candidate[],
+  ctx: PlanContext,
+  specs: readonly ConstraintSpec[],
+): { survivors: Survivors; winner: Candidate; forced: ReadonlySet<ConstraintKey> } {
+  let forced = new Set<ConstraintKey>()
+  let survivors = survive(candidates, ctx, specs, forced)
+  let winner = pickWinner(survivors, candidates, ctx, specs, forced)
+  if (winner === null) {
+    throw new Error('[compass] E-PLANNER-EMPTY: no candidate survived the ladder')
+  }
+
+  for (let guard = 0; guard < specs.length && survivors.relaxation !== null; guard += 1) {
+    const droppedKey = survivors.relaxation.first.key
+    const nextForced = new Set(forced)
+    nextForced.add(droppedKey)
+    const restoredSurvivors = survive(candidates, ctx, specs, nextForced)
+    const restoredWinner = pickWinner(restoredSurvivors, candidates, ctx, specs, nextForced)
+    if (restoredWinner === null || restoredWinner.cost.partyTotal > winner.cost.partyTotal) {
+      break
+    }
+    forced = nextForced
+    survivors = restoredSurvivors
+    winner = restoredWinner
+  }
+
+  return { survivors, winner, forced }
+}
+
+/**
  * R14's restore control: what the dropped constraint would cost if we put it back.
  * `null` on both figures means the catalogue has nothing at all with it re-applied,
  * and the banner says exactly that rather than offering a plan that does not exist.
@@ -290,8 +382,9 @@ function restoreFor(
   ctx: PlanContext,
   specs: readonly ConstraintSpec[],
   shownTotal: number,
+  baseForced: ReadonlySet<ConstraintKey> = new Set(),
 ): Restore {
-  const forced = new Set<ConstraintKey>([spec.key])
+  const forced = new Set<ConstraintKey>([...baseForced, spec.key])
   const winner = pickWinner(
     survive(candidates, ctx, specs, forced),
     candidates,
@@ -399,14 +492,30 @@ export function generatePlanSet(
     nightsConstraint(),
     ...withPathPriorities(constraintsFor(graph, input.answers)),
   ]
-  const forced = new Set<ConstraintKey>(input.forceConstraints ?? [])
+  const externalForced = new Set<ConstraintKey>(input.forceConstraints ?? [])
 
-  const survivors = survive(candidates, ctx, specs, forced)
-  const { pool, active, affordable } = survivors
-  const winner = pickWinner(survivors, candidates, ctx, specs, forced)
-  if (winner === null) {
-    throw new Error('[compass] E-PLANNER-EMPTY: no candidate survived the ladder')
+  // With nothing forced by the caller, this is the primary recommendation, and
+  // it has to survive its own restore control (fix round F1 — see
+  // `stableSurvive`). With something forced (R14's "Use the ₹X plan"), the
+  // caller already knows exactly what plan it is asking for, unchanged.
+  let survivors: Survivors
+  let winner: Candidate
+  let forced: ReadonlySet<ConstraintKey>
+  if (externalForced.size === 0) {
+    const stable = stableSurvive(candidates, ctx, specs)
+    survivors = stable.survivors
+    winner = stable.winner
+    forced = stable.forced
+  } else {
+    survivors = survive(candidates, ctx, specs, externalForced)
+    const externalWinner = pickWinner(survivors, candidates, ctx, specs, externalForced)
+    if (externalWinner === null) {
+      throw new Error('[compass] E-PLANNER-EMPTY: no candidate survived the ladder')
+    }
+    winner = externalWinner
+    forced = externalForced
   }
+  const { pool, active, affordable } = survivors
 
   const ceiling = stretchCeiling(ctx.budget)
   const why = (candidate: Candidate): Why =>
@@ -456,6 +565,7 @@ export function generatePlanSet(
             ctx,
             specs,
             winner.cost.partyTotal,
+            forced,
           ),
         }
 

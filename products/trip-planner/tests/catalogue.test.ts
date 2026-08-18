@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CATALOGUE, localCatalogue } from '../src/data/localCatalogue'
-import { scheduleItinerary } from '../src/domain/itinerary'
+import { eligibleExperiences, scheduleItinerary } from '../src/domain/itinerary'
 import { SEASONS } from '../src/domain/season'
 import { priceCandidate } from '../src/domain/pricing'
 import { VIBE_ORDER } from '../src/domain/vibes'
@@ -172,6 +172,30 @@ describe('C3 — every destination is completely specified', () => {
         }
       })
     })
+  }
+})
+
+/**
+ * C3, re-based (fix round F1 / architecture review D3, R7). The old invariant
+ * measured supply per *destination*; the scheduler's actual unit since fix 9 is
+ * the (destination × stay) pair, because the stay picks the base and the base
+ * decides what is reachable. A destination can pass the old check while 12 of its
+ * 42 pairs still ran dry — that is exactly how B7 shipped. This is the test that
+ * would have caught it, and the catalogue is now sized to pass it rather than the
+ * other way round.
+ */
+describe('C3 (re-based) — every (destination x stay) pair can fill every day it is offered', () => {
+  for (const destination of destinations) {
+    for (const stay of destination.stays) {
+      it(`${destination.id}/${stay.id}: eligibleExperiences >= maxNights + 1`, () => {
+        const supply = eligibleExperiences(destination, stay).length
+        expect(
+          supply,
+          `${destination.id}/${stay.id} offers up to ${destination.maxNights} nights ` +
+            `but its base reaches only ${supply} experiences`,
+        ).toBeGreaterThanOrEqual(destination.maxNights + 1)
+      })
+    }
   }
 })
 

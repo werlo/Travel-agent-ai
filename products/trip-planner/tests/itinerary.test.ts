@@ -179,7 +179,13 @@ describe('one plan, one base (R7 amended)', () => {
       for (const s of d.stays) {
         const base = baseFor(d, s)
         expect(d.bases.map((b) => b.id), `${d.id}/${s.id}`).toContain(s.baseId)
-        expect(eligibleExperiences(d, s).length, `${d.id}/${base.id}`).toBeGreaterThanOrEqual(4)
+        // Re-based on the scheduler's real unit (fix round F1, R7 / D3): the
+        // floor is derived from what the pair is actually offered, not a number
+        // chosen to make the fixture pass. See tests/catalogue.test.ts's C3
+        // (re-based) for the sweep across all 42 pairs.
+        expect(eligibleExperiences(d, s).length, `${d.id}/${base.id}`).toBeGreaterThanOrEqual(
+          d.maxNights + 1,
+        )
       }
     }
   })

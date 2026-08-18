@@ -21,7 +21,10 @@ export const DOMESTIC_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 0, beach: 5, party: 1, honeymoon: 3, peace: 4, culture: 3 },
     tags: ['coast', 'west-coast', 'quiet', 'backwater', 'food', 'heritage', 'romantic', 'short-haul'],
     minNights: 2,
-    maxNights: 14,
+    // Capped from 14 (fix round F1, R7/D3): both bases (Fort Kochi, Varkala)
+    // carry 6 eligible experiences each; C3 now requires eligibleExperiences >=
+    // maxNights + 1 for every stay, so 5 is the longest either base can fill.
+    maxNights: 5,
     localAllowancePerPersonPerDay: 900,
     fares: {
       Mumbai: { perPerson: 12400, hours: 1.8, mode: 'flight' },
@@ -60,7 +63,9 @@ export const DOMESTIC_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 0, beach: 5, party: 5, honeymoon: 3, peace: 1, culture: 2 },
     tags: ['coast', 'west-coast', 'lively', 'nightlife', 'food', 'romantic', 'short-haul'],
     minNights: 2,
-    maxNights: 12,
+    // Capped from 12 (fix round F1, R7/D3): Anjuna reaches 12 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 11,
     localAllowancePerPersonPerDay: 1300,
     fares: {
       Mumbai: { perPerson: 7200, hours: 1.1, mode: 'flight' },
@@ -99,7 +104,9 @@ export const DOMESTIC_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 0, beach: 5, party: 1, honeymoon: 4, peace: 5, culture: 1 },
     tags: ['coast', 'islands', 'quiet', 'romantic', 'short-haul'],
     minNights: 4,
-    maxNights: 12,
+    // Capped from 12 (fix round F1, R7/D3): Havelock reaches 11 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 10,
     localAllowancePerPersonPerDay: 1400,
     fares: {
       Mumbai: { perPerson: 26000, hours: 5.4, mode: 'flight' },
@@ -138,7 +145,9 @@ export const DOMESTIC_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 5, beach: 0, party: 3, honeymoon: 3, peace: 3, culture: 2 },
     tags: ['mountain', 'himalaya', 'lively', 'romantic', 'short-haul'],
     minNights: 2,
-    maxNights: 14,
+    // Capped from 14 (fix round F1, R7/D3): Manali reaches 12 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 11,
     localAllowancePerPersonPerDay: 900,
     fares: {
       Mumbai: { perPerson: 15800, hours: 3.4, mode: 'flight' },
@@ -177,7 +186,10 @@ export const DOMESTIC_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 5, beach: 0, party: 1, honeymoon: 3, peace: 4, culture: 3 },
     tags: ['mountain', 'northeast', 'quiet', 'heritage', 'food', 'short-haul'],
     minNights: 3,
-    maxNights: 14,
+    // Capped from 14 (fix round F1, R7/D3): both bases (Gangtok, Pelling) carry
+    // 6 eligible experiences each; C3 now requires eligibleExperiences >= maxNights
+    // + 1 for every stay, so 5 is the longest either base can fill.
+    maxNights: 5,
     localAllowancePerPersonPerDay: 850,
     fares: {
       Mumbai: { perPerson: 17600, hours: 3.5, mode: 'flight' },

@@ -101,8 +101,12 @@ test.describe('R11 / UX15 / UX16 — alternatives', () => {
   test('R11+UX15: a single empty slot carries the literal sentence, never an empty box', async ({
     page,
   }) => {
-    // Beach over Christmas has a Saver but no Stretch: exactly one absent slot.
-    await planBySkipping(page, 'Beach', { start: '20/12/2026', end: '27/12/2026' })
+    // Beach over this 7-night window has a Saver but no Stretch: exactly one
+    // absent slot. (Fix round F1 capped `in-varkala`'s maxNights from 14 to 5 —
+    // R7/D3, its base towns only reach 6 experiences each — so the Christmas
+    // window this test used to reach for is now a *both*-absent case instead;
+    // see the R22 test below for that one.)
+    await planBySkipping(page, 'Beach', { start: '10/10/2026', end: '17/10/2026' })
     const stretch = await altCard(page, 'stretch-absent')
     await expect(stretch).toBeVisible()
     await expect(stretch).toContainText(

@@ -16,7 +16,9 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 1, beach: 5, party: 3, honeymoon: 4, peace: 3, culture: 3 },
     tags: ['coast', 'islands', 'quiet', 'romantic', 'food', 'long-haul'],
     minNights: 4,
-    maxNights: 16,
+    // Capped from 16 (fix round F1, R7/D3): Ubud reaches 12 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 11,
     localAllowancePerPersonPerDay: 1700,
     fares: {
       Mumbai: { perPerson: 33500, hours: 7.6, mode: 'flight' },
@@ -55,7 +57,9 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 0, beach: 1, party: 5, honeymoon: 2, peace: 1, culture: 4 },
     tags: ['city', 'lively', 'nightlife', 'food', 'heritage', 'short-haul'],
     minNights: 2,
-    maxNights: 12,
+    // Capped from 12 (fix round F1, R7/D3): Bangkok reaches 12 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 11,
     localAllowancePerPersonPerDay: 1600,
     fares: {
       Mumbai: { perPerson: 24500, hours: 4.4, mode: 'flight' },
@@ -94,7 +98,9 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 0, beach: 5, party: 4, honeymoon: 3, peace: 2, culture: 2 },
     tags: ['coast', 'islands', 'lively', 'nightlife', 'food', 'romantic', 'short-haul'],
     minNights: 3,
-    maxNights: 14,
+    // Capped from 14 (fix round F1, R7/D3): Phuket reaches 12 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 11,
     localAllowancePerPersonPerDay: 1700,
     fares: {
       Mumbai: { perPerson: 26500, hours: 4.9, mode: 'flight' },
@@ -133,7 +139,10 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 5, beach: 0, party: 2, honeymoon: 3, peace: 4, culture: 4 },
     tags: ['mountain', 'himalaya', 'quiet', 'heritage', 'food', 'short-haul'],
     minNights: 3,
-    maxNights: 16,
+    // Capped from 16 (fix round F1, R7/D3): Pokhara carries 8 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1, so 7 is
+    // the longest this base can fill.
+    maxNights: 7,
     localAllowancePerPersonPerDay: 1100,
     fares: {
       Mumbai: { perPerson: 16500, hours: 3.2, mode: 'flight' },
@@ -172,7 +181,11 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 4, beach: 3, party: 1, honeymoon: 3, peace: 4, culture: 4 },
     tags: ['mountain', 'coast', 'quiet', 'heritage', 'food', 'romantic', 'short-haul'],
     minNights: 3,
-    maxNights: 16,
+    // Capped from 16 (fix round F1, R7/D3): the Mirissa base only reaches 8
+    // eligible experiences (4 added below, to match Ella's own 8); C3 now
+    // requires eligibleExperiences >= maxNights + 1 for every stay, so 7 is the
+    // longest either base can fill.
+    maxNights: 7,
     localAllowancePerPersonPerDay: 1200,
     fares: {
       Mumbai: { perPerson: 18500, hours: 3.1, mode: 'flight' },
@@ -200,6 +213,10 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
       { id: 'ella-lipton', name: "Lipton's Seat at sunrise", blurb: 'Where the man himself sat to survey his tea; a jeep at five and a long silence.', slot: 'morning', pricePerPerson: 1100, durationHours: 4, tags: ['mountain', 'quiet'], repeatable: false, baseId: 'ella', minutesFromBase: 60, fixedWeekday: null },
       { id: 'ella-hopper', name: 'Egg hoppers and a pot of tea', blurb: 'A bowl-shaped pancake with an egg in the middle, eaten standing up.', slot: 'morning', pricePerPerson: 0, durationHours: 1, tags: ['food'], repeatable: true, baseId: 'ella', minutesFromBase: 5, fixedWeekday: null },
       { id: 'ella-veranda', name: 'An afternoon on a veranda in the cloud', blurb: 'Ella sits in a gap in the hills; the weather arrives through it twice a day.', slot: 'afternoon', pricePerPerson: 0, durationHours: 3, tags: ['quiet', 'mountain'], repeatable: true, baseId: 'ella', minutesFromBase: 0, fixedWeekday: null },
+      { id: 'ella-weligama', name: 'A surf lesson at Weligama', blurb: 'A soft-top board, a forgiving beach break, and a shot at standing up by lunch.', slot: 'morning', pricePerPerson: 1600, durationHours: 3, tags: ['coast'], repeatable: false, baseId: 'mirissa', minutesFromBase: 30, fixedWeekday: null },
+      { id: 'ella-coconuthill', name: 'Sunset from Coconut Tree Hill', blurb: 'A short climb between two coves, and every boat in the bay lit orange.', slot: 'evening', pricePerPerson: 0, durationHours: 2, tags: ['coast', 'romantic', 'quiet'], repeatable: false, baseId: 'mirissa', minutesFromBase: 10, fixedWeekday: null },
+      { id: 'ella-stiltfisher', name: 'The stilt fishermen at Kathaluwa', blurb: 'A row of poles in the surf and men who still fish from them, mostly for the photograph now.', slot: 'afternoon', pricePerPerson: 300, durationHours: 1, tags: ['coast', 'heritage'], repeatable: false, baseId: 'mirissa', minutesFromBase: 25, fixedWeekday: null },
+      { id: 'ella-harbourwalk', name: 'An evening at the fisheries harbour', blurb: 'The catch coming in, gulls everywhere, and dinner decided for you an hour later.', slot: 'evening', pricePerPerson: 600, durationHours: 2, tags: ['coast', 'food'], repeatable: false, baseId: 'mirissa', minutesFromBase: 15, fixedWeekday: null },
     ],
   },
   {
@@ -250,7 +267,9 @@ export const INTERNATIONAL_DESTINATIONS: readonly Destination[] = [
     vibeAffinity: { mountains: 2, beach: 2, party: 3, honeymoon: 2, peace: 3, culture: 5 },
     tags: ['city', 'coast', 'heritage', 'food', 'quiet', 'long-haul'],
     minNights: 4,
-    maxNights: 14,
+    // Capped from 14 (fix round F1, R7/D3): Hanoi reaches 11 eligible
+    // experiences; C3 now requires eligibleExperiences >= maxNights + 1.
+    maxNights: 10,
     localAllowancePerPersonPerDay: 1400,
     fares: {
       Mumbai: { perPerson: 30500, hours: 6.8, mode: 'flight' },

@@ -242,6 +242,80 @@ describe('constraints and the relaxation ladder (R4, R14)', () => {
     expect(planSet.relaxation!.droppedKeys).toContain('region')
   })
 
+  it('never asserts a universal the catalogue disproves (R14, fix round F1)', () => {
+    // The architecture review's own reproduction: Party / Within India / A city /
+    // A proper city night / Local stays, 13-16 Nov 2026, 9 adults, ₹4,50,000 from
+    // Delhi. The old ladder dropped "city nightlife" (party-scene) by fixed order
+    // and printed "No city nightlife party trip fits..." while 10 of 42
+    // candidates that DO hold city nightlife fit the budget — the true blocker
+    // was "a city" (party-domestic). The fixed ladder never reconsidered it.
+    const { input } = inputFor(
+      'party',
+      {
+        'party-region': 'within-india',
+        'party-domestic': 'city',
+        'party-scene': 'city-night',
+        'stay-style': 'local-stays',
+      },
+      {
+        startDate: '2026-11-13',
+        endDate: '2026-11-16',
+        budget: 450000,
+        travellers: 9,
+        adults: 9,
+        origin: 'Delhi',
+      },
+    )
+    const planSet = generatePlanSet(input, CATALOGUE)
+    expect(planSet.relaxation).not.toBeNull()
+    // The banner must not name "city nightlife" — dropping it was never what
+    // unblocked the pool, so claiming nothing-with-it fits would be false.
+    expect(planSet.relaxation!.banner).not.toContain('city nightlife')
+    expect(planSet.relaxation!.droppedKeys).not.toContain('q:party-scene')
+    // Putting the dropped constraint back can only ever cost the same or more —
+    // never less, which would prove the banner's "nothing fits" claim false.
+    const restore = planSet.relaxation!.restore
+    if (restore.costDelta !== null) {
+      expect(restore.costDelta).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('the relaxation banner never lies: restore.costDelta < 0 never occurs', () => {
+    // A wide sweep of scenarios that force the ladder to drop something, across
+    // every vibe, with real (non-"no preference") answers so the ladder has
+    // something to relax in the first place. Whatever the banner names,
+    // restoring it must never turn out to be *cheaper* than the plan already on
+    // screen — that arithmetic impossibility is exactly what proved the old
+    // banner false.
+    let sawARelaxation = false
+    for (const vibe of VIBE_ORDER) {
+      for (const region of ['within-india', 'international'] as const) {
+        for (const budget of [20000, 25000, 30000, 45000, 60000, 90000]) {
+          for (const travellers of [2, 4, 9]) {
+            const { input } = inputFor(
+              vibe,
+              { [`${vibe}-region`]: region },
+              { budget, travellers, adults: travellers, children: [] },
+            )
+            const planSet = generatePlanSet(input, CATALOGUE)
+            if (planSet.relaxation === null) continue
+            sawARelaxation = true
+            const { costDelta } = planSet.relaxation.restore
+            expect(
+              costDelta === null || costDelta >= 0,
+              `${vibe}/${region} @ ₹${budget} x${travellers}: restore.costDelta = ${costDelta}`,
+            ).toBe(true)
+          }
+        }
+      }
+    }
+    // The party/city-9/₹4,50,000 reproduction above already proves this branch
+    // is reachable; this assertion just guards against the sweep silently
+    // stopping triggering any relaxation at all (a test that can never fail is
+    // worth nothing).
+    expect(sawARelaxation).toBe(true)
+  })
+
   it('always returns a plan, for every vibe and every origin', () => {
     for (const vibe of VIBE_ORDER) {
       for (const origin of ['Mumbai', 'Delhi', 'Bengaluru', 'Chennai', 'Kolkata', 'Hyderabad'] as const) {

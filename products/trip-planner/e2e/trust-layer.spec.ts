@@ -156,8 +156,11 @@ test.describe('R11 — the alternatives', () => {
 
   test('an empty slot carries the sentence, never an empty box', async ({ page }) => {
     // R22 replaced the both-absent case with a single working control, so the
-    // sentence is now asserted on a plan with exactly one absent slot.
-    await planFor(page, 'Beach', [], { startDate: '20/12/2026', endDate: '27/12/2026' })
+    // sentence is now asserted on a plan with exactly one absent slot. (Fix
+    // round F1 capped `in-varkala`'s maxNights from 14 to 5 — R7/D3, its base
+    // towns only reach 6 experiences each — so the Christmas window this test
+    // used to reach for is now a *both*-absent case instead.)
+    await planFor(page, 'Beach', [], { startDate: '10/10/2026', endDate: '17/10/2026' })
 
     const slot = page.locator('[data-alt="stretch-absent"]')
     await expect(slot).toBeVisible()
